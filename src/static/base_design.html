@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestão de Doações - São Vicente</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+            min-height: 100vh;
+            color: #2d5a27;
+            position: relative;
+        }
+
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><pattern id="leaf" x="0" y="0" width="20" height="20" patternUnits="userSpaceOnUse"><circle cx="10" cy="10" r="1" fill="rgba(255,255,255,0.1)"/></pattern></defs><rect width="100" height="100" fill="url(%23leaf)"/></svg>');
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            position: relative;
+            z-index: 1;
+        }
+
+        .header {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(15px);
+            border-radius: 25px;
+            padding: 40px;
+            margin-bottom: 30px;
+            box-shadow: 0 20px 40px rgba(17, 153, 142, 0.3);
+            text-align: center;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+        }
+
+        .header h1 {
+            background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            font-size: 3em;
+            margin-bottom: 15px;
+            font-weight: 700;
+            text-shadow: 0 2px 10px rgba(17, 153, 142, 0.3);
+        }
+
+        .header p {
+            color: #2d5a27;
+            font-size: 1.3em;
+            font-weight: 500;
+        }
+
+        .login-section {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(15px);
+            border-radius: 25px;
+            padding: 50px;
+            margin-bottom: 30px;
+            box-shadow: 0 20px 40px rgba(17, 153, 142, 0.3);
+            border: 2px solid rgba(255, 255, 255, 0.3);
+        }
+
+        .card {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(15px);
+            border-radius: 25px;
+            padding: 35px;
+            box-shadow: 0 15px 35px rgba(17, 153, 142, 0.2);
+            transition: all 0.4s ease;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(56, 239, 125, 0.1), transparent);
+            transition: left 0.6s ease;
+        }
+
+        .card:hover::before {
+            left: 100%;
+        }
+
+        .card:hover {
+            transform: translateY(-8px) scale(1.02);
+            box-shadow: 0 25px 50px rgba(17, 153, 142, 0.3);
+        }
+
+        .btn {
+            background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+            color: white;
+            border: none;
+            padding: 16px 32px;
+            border-radius: 50px;
+            font-size: 1.1em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 12px;
+            box-shadow: 0 8px 25px rgba(17, 153, 142, 0.4);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .btn:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 15px 35px rgba(17, 153, 142, 0.6);
+        }
+
+        .btn-secondary {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            box-shadow: 0 8px 25px rgba(245, 87, 108, 0.4);
+        }
+
+        .btn-secondary:hover {
+            box-shadow: 0 15px 35px rgba(245, 87, 108, 0.6);
+        }
+
+        .btn-danger {
+            background: linear-gradient(135deg, #ff9a9e 0%, #fecfef 100%);
+            box-shadow: 0 8px 25px rgba(255, 154, 158, 0.4);
+        }
+
+        .card-icon {
+            width: 70px;
+            height: 70px;
+            border-radius: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 25px;
+            font-size: 28px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+        }
+
+        .icon-beneficiarios { 
+            background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%); 
+        }
+        .icon-doacoes { 
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); 
+        }
+        .icon-stock { 
+            background: linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%); 
+            color: #8b4513;
+        }
+        .icon-relatorios { 
+            background: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%); 
+            color: #2d5a27;
+        }
+
+        .form-group input, .form-group select, .form-group textarea {
+            width: 100%;
+            padding: 18px 25px;
+            border: 3px solid #e8f5e8;
+            border-radius: 15px;
+            font-size: 1.1em;
+            transition: all 0.3s ease;
+            background: rgba(255, 255, 255, 0.9);
+            color: #2d5a27;
+        }
+
+        .form-group input:focus, .form-group select:focus, .form-group textarea:focus {
+            outline: none;
+            border-color: #11998e;
+            box-shadow: 0 0 0 4px rgba(17, 153, 142, 0.2);
+            background: white;
+        }
+
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 25px;
+            margin-bottom: 40px;
+        }
+
+        .stat-card {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(15px);
+            border-radius: 20px;
+            padding: 30px;
+            text-align: center;
+            box-shadow: 0 10px 30px rgba(17, 153, 142, 0.2);
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            transition: all 0.3s ease;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 20px 40px rgba(17, 153, 142, 0.3);
+        }
+
+        .stat-number {
+            font-size: 3em;
+            font-weight: bold;
+            background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 8px;
+        }
+
+        .stat-label {
+            color: #2d5a27;
+            font-size: 1.2em;
+            font-weight: 500;
+        }
+
+        .nav-btn {
+            background: rgba(255, 255, 255, 0.9);
+            border: 3px solid #e8f5e8;
+            color: #2d5a27;
+            padding: 15px 25px;
+            border-radius: 15px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .nav-btn.active {
+            background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+            color: white;
+            border-color: transparent;
+            box-shadow: 0 8px 25px rgba(17, 153, 142, 0.4);
+        }
+
+        .table-container {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(15px);
+            border-radius: 25px;
+            padding: 35px;
+            box-shadow: 0 15px 35px rgba(17, 153, 142, 0.2);
+            border: 2px solid rgba(255, 255, 255, 0.3);
+        }
+
+        .table th {
+            background: linear-gradient(135deg, #f0fdfa, #e8f5e8);
+            color: #2d5a27;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .badge-success { 
+            background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+            box-shadow: 0 4px 15px rgba(17, 153, 142, 0.3);
+        }
+        .badge-warning { 
+            background: linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%);
+            color: #8b4513;
+            box-shadow: 0 4px 15px rgba(252, 182, 159, 0.3);
+        }
+        .badge-danger { 
+            background: linear-gradient(135deg, #ff9a9e 0%, #fecfef 100%);
+            color: #8b1538;
+            box-shadow: 0 4px 15px rgba(255, 154, 158, 0.3);
+        }
+
+        .alert {
+            padding: 20px 25px;
+            border-radius: 15px;
+            margin-bottom: 25px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-weight: 500;
+            border: 2px solid transparent;
+        }
+
+        .alert-warning {
+            background: linear-gradient(135deg, #fff3cd, #ffeaa7);
+            border-color: #fcb69f;
+            color: #8b4513;
+        }
+
+        .alert-success {
+            background: linear-gradient(135deg, #d4edda, #c3f7df);
+            border-color: #38ef7d;
+            color: #2d5a27;
+        }
+
+        .modal-content {
+            background: rgba(255, 255, 255, 0.98);
+            backdrop-filter: blur(20px);
+            border-radius: 25px;
+            padding: 45px;
+            border: 2px solid rgba(255, 255, 255, 0.5);
+            box-shadow: 0 25px 50px rgba(17, 153, 142, 0.4);
+        }
+
+        /* Animações especiais */
+        @keyframes leafFloat {
+            0%, 100% { transform: translateY(0px) rotate(0deg); }
+            50% { transform: translateY(-10px) rotate(5deg); }
+        }
+
+        .card-icon {
+            animation: leafFloat 3s ease-in-out infinite;
+        }
+
+        .card-icon:nth-child(odd) {
+            animation-delay: 0.5s;
+        }
+
+        /* Responsividade melhorada */
+        @media (max-width: 768px) {
+            .header h1 { font-size: 2.2em; }
+            .header p { font-size: 1.1em; }
+            .card { padding: 25px; }
+            .btn { padding: 14px 24px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <h1>🌿 Gestão de Doações</h1>
+            <p>Cuidando de São Vicente com amor e natureza</p>
+        </div>
+
+        <!-- Login Section -->
+        <div class="login-section" id="loginSection">
+            <div class="login-form" style="max-width: 450px; margin: 0 auto;">
+                <h2 style="text-align: center; margin-bottom: 35px; color: #2d5a27; font-size: 2em;">🌱 Acesso Verde</h2>
+                <div class="form-group" style="margin-bottom: 25px;">
+                    <label style="display: block; margin-bottom: 10px; color: #2d5a27; font-weight: 600; font-size: 1.1em;">🏢 Instituição</label>
+                    <select id="institutionSelect">
+                        <option value="">Selecione sua instituição</option>
+                        <option value="caritas">🤝 Cáritas São Vicente</option>
+                        <option value="cruz_vermelha">❤️ Cruz Vermelha</option>
+                        <option value="adra">🌟 ADRA São Vicente</option>
+                        <option value="bombeiros">🚒 Bombeiros Voluntários</option>
+                        <option value="camara">🏛️ Câmara Municipal</option>
+                    </select>
+                </div>
+                <div class="form-group" style="margin-bottom: 35px;">
+                    <label style="display: block; margin-bottom: 10px; color: #2d5a27; font-weight: 600; font-size: 1.1em;">🔐 Código de Acesso</label>
+                    <input type="password" id="accessCode" placeholder="Digite o código secreto">
+                </div>
+                <button class="btn" onclick="login()" style="width: 100%;">
+                    🚪 Entrar no Jardim Digital
+                </button>
+            </div>
+        </div>
+
+        <!-- Main App (simplified for demo) -->
+        <div class="main-app" id="mainApp" style="display: none;">
+            <!-- Stats -->
+            <div class="stats">
+                <div class="stat-card">
+                    <div class="stat-number">48</div>
+                    <div class="stat-label">🌱 Beneficiários</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number">127</div>
+                    <div class="stat-label">🎁 Doações</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number">15</div>
+                    <div class="stat-label">📦 Stock Items</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number">8</div>
+                    <div class="stat-label">⏳ Pendentes</div>
+                </div>
+            </div>
+
+            <!-- Dashboard Cards -->
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 30px;">
+                <div class="card">
+                    <div class="card-icon icon-beneficiarios">🌱</div>
+                    <h3 style="color: #2d5a27; font-size: 1.5em; margin-bottom: 15px;">Plantar Esperança</h3>
+                    <p style="color: #5a7c76; margin-bottom: 25px; line-height: 1.6;">Cadastrar nova família que precisa de cuidado</p>
+                    <button class="btn">🌿 Nova Semente</button>
+                </div>
+
+                <div class="card">
+                    <div class="card-icon icon-doacoes">💚</div>
+                    <h3 style="color: #2d5a27; font-size: 1.5em; margin-bottom: 15px;">Espalhar Amor</h3>
+                    <p style="color: #5a7c76; margin-bottom: 25px; line-height: 1.6;">Registar doação entregue com carinho</p>
+                    <button class="btn btn-secondary">💝 Doar Amor</button>
+                </div>
+
+                <div class="card">
+                    <div class="card-icon icon-stock">🌾</div>
+                    <h3 style="color: #2d5a27; font-size: 1.5em; margin-bottom: 15px;">Colheita Digital</h3>
+                    <p style="color: #5a7c76; margin-bottom: 25px; line-height: 1.6;">Gerir recursos com sabedoria</p>
+                    <button class="btn" style="background: linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%); color: #8b4513;">🌾 Ver Colheita</button>
+                </div>
+
+                <div class="card">
+                    <div class="card-icon icon-relatorios">📊</div>
+                    <h3 style="color: #2d5a27; font-size: 1.5em; margin-bottom: 15px;">Frutos do Trabalho</h3>
+                    <p style="color: #5a7c76; margin-bottom: 25px; line-height: 1.6;">Ver o crescimento da nossa missão</p>
+                    <button class="btn" style="background: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%); color: #2d5a27;">📈 Ver Crescimento</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function login() {
+            const institution = document.getElementById('institutionSelect').value;
+            const accessCode = document.getElementById('accessCode').value;
+
+            if (!institution) {
+                alert('🌿 Por favor, escolha sua instituição verde.');
+                return;
+            }
+
+            if (!accessCode) {
+                alert('🔐 Por favor, digite o código da natureza.');
+                return;
+            }
+
+            if (accessCode === '123456') {
+                document.getElementById('loginSection').style.display = 'none';
+                document.getElementById('mainApp').style.display = 'block';
+                
+                // Efeito de crescimento suave
+                setTimeout(() => {
+                    document.getElementById('mainApp').style.opacity = '0';
+                    document.getElementById('mainApp').style.transform = 'translateY(20px)';
+                    document.getElementById('mainApp').style.transition = 'all 0.6s ease';
+                    
+                    setTimeout(() => {
+                        document.getElementById('mainApp').style.opacity = '1';
+                        document.getElementById('mainApp').style.transform = 'translateY(0)';
+                    }, 100);
+                }, 100);
+                
+                alert('🌱 Bem-vindo ao jardim digital! A natureza agradece sua dedicação.');
+            } else {
+                alert('🍃 Código incorreto. Tente: 123456 (código da harmonia)');
+            }
+        }
+    </script>
+</body>
+</html>
