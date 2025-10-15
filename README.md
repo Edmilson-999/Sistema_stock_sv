@@ -223,5 +223,6 @@ Este sistema foi criado com o objetivo de facilitar a coordenação entre as dif
 
 *Sistema desenvolvido com 💚 para apoio às vítimas do enchente de São Vicente*
 
-# Implementar uma feature para eliminar uma instituição pelo administrador
-# Mudar a password das instituições e o aecesso a painel administrativo
+Implementar uma feature para eliminar uma instituição pelo administrador
+Mudar a password das instituições e o acesso a painel administrativo
+NO admin evitar que os nomes e admin aparecem ao clicar no campo de username 
