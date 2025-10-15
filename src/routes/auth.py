@@ -368,6 +368,66 @@ def rejeitar_instituicao(instituicao_id):
     except Exception as e:
         return jsonify({'error': f'Erro interno: {str(e)}'}), 500
 
+@auth_bp.route('/admin/eliminar-instituicao/<int:instituicao_id>', methods=['DELETE'])
+@admin_required
+def eliminar_instituicao(instituicao_id):
+    """Endpoint para eliminar uma instituição"""
+    try:
+        current_instituicao = get_current_instituicao()
+        
+        # Não permitir que o admin se elimine a si mesmo
+        if instituicao_id == current_instituicao.id:
+            return jsonify({'error': 'Não pode eliminar a sua própria instituição'}), 400
+        
+        instituicao = Instituicao.query.get(instituicao_id)
+        
+        if not instituicao:
+            return jsonify({'error': 'Instituição não encontrada'}), 404
+        
+        # Guardar informações para o log
+        nome_instituicao = instituicao.nome
+        username_instituicao = instituicao.username
+        
+        # Eliminar a instituição
+        db.session.delete(instituicao)
+        db.session.commit()
+        
+        print(f"✅ Instituição eliminada por {current_instituicao.nome}: {nome_instituicao} ({username_instituicao})")
+        
+        return jsonify({
+            'success': True,
+            'message': f'Instituição {nome_instituicao} eliminada com sucesso'
+        }), 200
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': f'Erro ao eliminar instituição: {str(e)}'}), 500
+
+
+@auth_bp.route('/admin/todas-instituicoes', methods=['GET'])
+@admin_required
+def get_todas_instituicoes():
+    """Endpoint para listar todas as instituições (para administração)"""
+    try:
+        # Buscar todas as instituições (aprovadas e não aprovadas)
+        instituicoes = Instituicao.query.all()
+        
+        instituicoes_list = []
+        for inst in instituicoes:
+            inst_dict = inst.to_dict()
+            # Adicionar informações adicionais para admin
+            inst_dict['estado'] = 'Aprovada' if inst.aprovada else 'Pendente' if not inst.aprovada and inst.ativa else 'Rejeitada'
+            inst_dict['pode_eliminar'] = inst.username not in ['admin', 'caritas']  # Não permitir eliminar admin
+            instituicoes_list.append(inst_dict)
+        
+        return jsonify({
+            'success': True,
+            'instituicoes': instituicoes_list
+        }), 200
+        
+    except Exception as e:
+        return jsonify({'error': f'Erro interno: {str(e)}'}), 500
+
 @auth_bp.route('/admin/estatisticas', methods=['GET'])
 @admin_required
 def get_estatisticas_admin():

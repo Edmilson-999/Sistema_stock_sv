@@ -6,6 +6,7 @@
 class SistemaRegistro {
     constructor() {
         this.tiposInstituicao = [];
+        this.instituicoesData = [];
         this.carregarTiposInstituicao();
     }
 
@@ -102,8 +103,8 @@ class SistemaRegistro {
                 if (data.instituicao.username === 'admin' || data.instituicao.username === 'caritas') {
                     // Fechar modal de login
                     form.closest('.modal-overlay').remove();
-                    // Mostrar painel administrativo
-                    this.mostrarPainelAdmin();
+                    // Mostrar gestão de instituições
+                    this.mostrarGestaoInstituicoes();
                 } else {
                     this.mostrarErroAdmin('Acesso negado. Apenas administradores podem acessar este painel.');
                     // Fazer logout já que não é admin
@@ -119,27 +120,11 @@ class SistemaRegistro {
     }
 
     /**
-     * Mostra painel administrativo para aprovação (após login bem-sucedido)
+     * Mostra gestão completa de instituições (aprovadas e pendentes)
      */
-    async mostrarPainelAdmin() {
+    async mostrarGestaoInstituicoes() {
         try {
-            // Verificar se está autenticado como admin
-            const authCheck = await fetch('/api/auth/check');
-            const authData = await authCheck.json();
-            
-            if (!authData.authenticated) {
-                this.mostrarLoginAdmin();
-                return;
-            }
-
-            // Verificar se é admin
-            if (!authData.instituicao.admin) {
-                alert('Acesso negado. Apenas administradores podem acessar este painel.');
-                return;
-            }
-            
-            // Carregar as instituições pendentes
-            const response = await fetch('/api/auth/admin/instituicoes-pendentes', {
+            const response = await fetch('/api/auth/admin/todas-instituicoes', {
                 credentials: 'include'
             });
 
@@ -151,7 +136,7 @@ class SistemaRegistro {
             const data = await response.json();
 
             if (!data.success) {
-                throw new Error(data.error || 'Erro ao carregar instituições pendentes');
+                throw new Error(data.error || 'Erro ao carregar instituições');
             }
 
             // Esconder a tela de login principal
@@ -163,10 +148,10 @@ class SistemaRegistro {
             modal.innerHTML = `
                 <div class="modal-content admin-modal">
                     <div class="modal-header">
-                        <h3>🛡️ Painel Administrativo</h3>
-                        <p>Instituições pendentes de aprovação</p>
+                        <h3>🛡️ Gestão de Instituições</h3>
+                        <p>Gerir todas as instituições do sistema</p>
                         <div class="admin-info">
-                            <small>Logado como: ${authData.instituicao.nome}</small>
+                            <small>Logado como: ${data.admin?.nome || 'Administrador'}</small>
                             <button class="btn btn-small btn-danger" onclick="sistemaRegistro.sairPainelAdmin()">
                                 🚪 Sair
                             </button>
@@ -174,57 +159,187 @@ class SistemaRegistro {
                     </div>
                     
                     <div class="modal-body">
-                        ${data.instituicoes.length === 0 ? `
-                            <div class="empty-state">
-                                <p>✅ Nenhuma instituição pendente de aprovação</p>
-                            </div>
-                        ` : `
-                            <div class="instituicoes-pendentes">
-                                ${data.instituicoes.map(inst => `
-                                    <div class="instituicao-card" data-id="${inst.id}">
-                                        <div class="instituicao-header">
-                                            <h4>${inst.nome}</h4>
-                                            <span class="tipo-badge">${inst.tipo_instituicao}</span>
-                                        </div>
-                                        
-                                        <div class="instituicao-details">
-                                            <p><strong>Username:</strong> ${inst.username}</p>
-                                            <p><strong>Email:</strong> ${inst.email}</p>
-                                            <p><strong>Responsável:</strong> ${inst.responsavel}</p>
-                                            ${inst.telefone ? `<p><strong>Telefone:</strong> ${inst.telefone}</p>` : ''}
-                                            ${inst.documento_legal ? `<p><strong>Documento:</strong> ${inst.documento_legal}</p>` : ''}
-                                            ${inst.endereco ? `<p><strong>Endereço:</strong> ${inst.endereco}</p>` : ''}
-                                            ${inst.descricao ? `<p><strong>Descrição:</strong> ${inst.descricao}</p>` : ''}
-                                            <p><strong>Data de Registro:</strong> ${new Date(inst.data_criacao).toLocaleDateString('pt-PT')}</p>
-                                        </div>
-                                        
-                                        <div class="instituicao-actions">
-                                            <button class="btn btn-success" onclick="sistemaRegistro.aprovarInstituicao(${inst.id})">
-                                                ✅ Aprovar
-                                            </button>
-                                            <button class="btn btn-danger" onclick="sistemaRegistro.rejeitarInstituicao(${inst.id})">
-                                                ❌ Rejeitar
-                                            </button>
-                                        </div>
-                                    </div>
-                                `).join('')}
-                            </div>
-                        `}
+                        <div class="tabs">
+                            <button class="tab-button active" onclick="sistemaRegistro.mostrarAba('pendentes')">
+                                ⏳ Pendentes (${data.instituicoes.filter(i => i.estado === 'Pendente').length})
+                            </button>
+                            <button class="tab-button" onclick="sistemaRegistro.mostrarAba('aprovadas')">
+                                ✅ Aprovadas (${data.instituicoes.filter(i => i.estado === 'Aprovada').length})
+                            </button>
+                            <button class="tab-button" onclick="sistemaRegistro.mostrarAba('todas')">
+                                📋 Todas (${data.instituicoes.length})
+                            </button>
+                        </div>
+                        
+                        <div id="abaConteudo">
+                            <!-- Conteúdo será carregado aqui -->
+                        </div>
                     </div>
 
                     <div class="modal-footer">
                         <button class="btn btn-secondary" onclick="sistemaRegistro.sairPainelAdmin()">
-                            Fechar Painel
+                            Fechar
                         </button>
                     </div>
                 </div>
             `;
 
             document.body.appendChild(modal);
+            
+            // Guardar dados das instituições
+            this.instituicoesData = data.instituicoes;
+            
+            // Mostrar aba padrão
+            this.mostrarAba('pendentes');
 
         } catch (error) {
-            console.error('Erro ao carregar painel admin:', error);
-            alert('Erro ao carregar painel administrativo: ' + error.message);
+            console.error('Erro ao carregar gestão de instituições:', error);
+            alert('Erro ao carregar gestão de instituições: ' + error.message);
+        }
+    }
+
+    /**
+     * Mostra diferentes abas na gestão de instituições
+     */
+    mostrarAba(aba) {
+        const conteudo = document.getElementById('abaConteudo');
+        if (!conteudo) return;
+
+        let instituicoesFiltradas = [];
+        let titulo = '';
+
+        switch (aba) {
+            case 'pendentes':
+                instituicoesFiltradas = this.instituicoesData.filter(i => i.estado === 'Pendente');
+                titulo = 'Instituições Pendentes de Aprovação';
+                break;
+            case 'aprovadas':
+                instituicoesFiltradas = this.instituicoesData.filter(i => i.estado === 'Aprovada');
+                titulo = 'Instituições Aprovadas';
+                break;
+            case 'todas':
+                instituicoesFiltradas = this.instituicoesData;
+                titulo = 'Todas as Instituições';
+                break;
+        }
+
+        // Atualizar tabs ativas
+        document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
+        event.target.classList.add('active');
+
+        if (instituicoesFiltradas.length === 0) {
+            conteudo.innerHTML = `
+                <div class="empty-state">
+                    <p>✅ Nenhuma instituição encontrada</p>
+                </div>
+            `;
+            return;
+        }
+
+        let html = `
+            <h4 style="margin-bottom: 20px; color: #2d5a27;">${titulo}</h4>
+            <div class="instituicoes-lista">
+        `;
+
+        instituicoesFiltradas.forEach(inst => {
+            const dataCriacao = new Date(inst.data_criacao).toLocaleDateString('pt-PT');
+            
+            html += `
+                <div class="instituicao-card" data-id="${inst.id}">
+                    <div class="instituicao-header">
+                        <h4>${inst.nome}</h4>
+                        <div class="instituicao-status">
+                            <span class="status-badge status-${inst.estado.toLowerCase()}">${inst.estado}</span>
+                            ${inst.pode_eliminar ? `
+                                <button class="btn btn-danger btn-small" onclick="sistemaRegistro.eliminarInstituicao(${inst.id}, '${inst.nome}')">
+                                    🗑️ Eliminar
+                                </button>
+                            ` : `
+                                <span class="badge-protected">🔒 Protegida</span>
+                            `}
+                        </div>
+                    </div>
+                    
+                    <div class="instituicao-details">
+                        <p><strong>Username:</strong> ${inst.username}</p>
+                        <p><strong>Email:</strong> ${inst.email}</p>
+                        <p><strong>Responsável:</strong> ${inst.responsavel}</p>
+                        <p><strong>Tipo:</strong> ${inst.tipo_instituicao}</p>
+                        ${inst.telefone ? `<p><strong>Telefone:</strong> ${inst.telefone}</p>` : ''}
+                        ${inst.documento_legal ? `<p><strong>Documento:</strong> ${inst.documento_legal}</p>` : ''}
+                        <p><strong>Data de Registo:</strong> ${dataCriacao}</p>
+                        ${inst.descricao ? `<p><strong>Descrição:</strong> ${inst.descricao}</p>` : ''}
+                    </div>
+                    
+                    ${inst.estado === 'Pendente' ? `
+                        <div class="instituicao-actions">
+                            <button class="btn btn-success" onclick="sistemaRegistro.aprovarInstituicao(${inst.id})">
+                                ✅ Aprovar
+                            </button>
+                            <button class="btn btn-danger" onclick="sistemaRegistro.rejeitarInstituicao(${inst.id})">
+                                ❌ Rejeitar
+                            </button>
+                        </div>
+                    ` : ''}
+                </div>
+            `;
+        });
+
+        html += '</div>';
+        conteudo.innerHTML = html;
+    }
+
+    /**
+     * Atualiza contadores nas tabs
+     */
+    atualizarContadoresTabs() {
+        const pendentes = this.instituicoesData.filter(i => i.estado === 'Pendente').length;
+        const aprovadas = this.instituicoesData.filter(i => i.estado === 'Aprovada').length;
+        const todas = this.instituicoesData.length;
+
+        document.querySelectorAll('.tab-button').forEach((btn, index) => {
+            if (index === 0) btn.textContent = `⏳ Pendentes (${pendentes})`;
+            if (index === 1) btn.textContent = `✅ Aprovadas (${aprovadas})`;
+            if (index === 2) btn.textContent = `📋 Todas (${todas})`;
+        });
+    }
+
+    /**
+     * Elimina uma instituição
+     */
+    async eliminarInstituicao(instituicaoId, nomeInstituicao) {
+        if (!confirm(`Tem certeza que deseja ELIMINAR a instituição "${nomeInstituicao}"?\n\n⚠️ Esta ação é irreversível e eliminará todos os dados associados.`)) {
+            return;
+        }
+
+        try {
+            const response = await fetch(`/api/auth/admin/eliminar-instituicao/${instituicaoId}`, {
+                method: 'DELETE',
+                credentials: 'include'
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                // Remover card da lista
+                const card = document.querySelector(`[data-id="${instituicaoId}"]`);
+                if (card) {
+                    card.remove();
+                }
+                
+                // Atualizar a lista de instituições
+                this.instituicoesData = this.instituicoesData.filter(inst => inst.id !== instituicaoId);
+                
+                // Atualizar contadores nas tabs
+                this.atualizarContadoresTabs();
+                
+                this.mostrarNotificacao(`Instituição "${nomeInstituicao}" eliminada com sucesso!`, 'success');
+            } else {
+                throw new Error(data.error);
+            }
+        } catch (error) {
+            console.error('Erro ao eliminar instituição:', error);
+            this.mostrarNotificacao('Erro ao eliminar instituição: ' + error.message, 'error');
         }
     }
 
@@ -271,6 +386,8 @@ class SistemaRegistro {
             errorDiv.style.display = 'none';
         }
     }
+
+    // ... (mantenha todas as outras funções existentes: mostrarFormularioRegistro, fecharModalRegistro, etc.)
 
     /**
      * Mostra o formulário de registro
@@ -741,36 +858,49 @@ const registroCSS = `
     padding-left: 20px;
 }
 
-.instituicoes-pendentes {
+/* Estilos para gestão de instituições */
+.tabs {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 20px;
+    border-bottom: 2px solid #e8f5e8;
+    padding-bottom: 10px;
+}
+
+.tab-button {
+    background: transparent;
+    border: 2px solid #e8f5e8;
+    padding: 10px 20px;
+    border-radius: 25px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    color: #5a7c76;
+    font-weight: 600;
+}
+
+.tab-button:hover {
+    border-color: #11998e;
+    color: #11998e;
+}
+
+.tab-button.active {
+    background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+    border-color: #11998e;
+    color: white;
+}
+
+.instituicoes-lista {
     max-height: 500px;
     overflow-y: auto;
 }
 
-.instituicao-card {
-    border: 1px solid #ddd;
-    border-radius: 8px;
-    padding: 20px;
-    margin-bottom: 15px;
-    background: white;
-}
-
-.instituicao-header {
+.instituicao-status {
     display: flex;
-    justify-content: space-between;
     align-items: center;
-    margin-bottom: 15px;
-    padding-bottom: 10px;
-    border-bottom: 1px solid #eee;
+    gap: 10px;
 }
 
-.instituicao-header h4 {
-    margin: 0;
-    color: #333;
-}
-
-.tipo-badge {
-    background: #e3f2fd;
-    color: #1976d2;
+.status-badge {
     padding: 4px 12px;
     border-radius: 12px;
     font-size: 12px;
@@ -778,21 +908,86 @@ const registroCSS = `
     text-transform: uppercase;
 }
 
+.status-pendente {
+    background: #fff3cd;
+    color: #856404;
+    border: 1px solid #ffeaa7;
+}
+
+.status-aprovada {
+    background: #d4edda;
+    color: #155724;
+    border: 1px solid #c3e6cb;
+}
+
+.status-rejeitada {
+    background: #f8d7da;
+    color: #721c24;
+    border: 1px solid #f5c6cb;
+}
+
+.badge-protected {
+    background: #e9ecef;
+    color: #6c757d;
+    padding: 4px 12px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: bold;
+}
+
+.instituicao-card {
+    border: 1px solid #e8f5e8;
+    border-radius: 15px;
+    padding: 20px;
+    margin-bottom: 15px;
+    background: white;
+    transition: all 0.3s ease;
+}
+
+.instituicao-card:hover {
+    box-shadow: 0 5px 15px rgba(17, 153, 142, 0.1);
+    transform: translateY(-2px);
+}
+
+.instituicao-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 15px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #f0f0f0;
+}
+
+.instituicao-header h4 {
+    margin: 0;
+    color: #2d5a27;
+    flex: 1;
+}
+
+.instituicao-details {
+    margin-bottom: 15px;
+}
+
 .instituicao-details p {
-    margin: 8px 0;
+    margin: 5px 0;
     font-size: 14px;
+    color: #5a7c76;
 }
 
 .instituicao-details strong {
-    color: #555;
+    color: #2d5a27;
 }
 
 .instituicao-actions {
     display: flex;
     gap: 10px;
-    margin-top: 15px;
     padding-top: 15px;
-    border-top: 1px solid #eee;
+    border-top: 1px solid #f0f0f0;
+}
+
+.instituicoes-pendentes {
+    max-height: 500px;
+    overflow-y: auto;
 }
 
 .empty-state {
@@ -904,6 +1099,20 @@ const registroCSS = `
         flex-direction: column;
         gap: 10px;
         text-align: center;
+    }
+    
+    .tabs {
+        flex-direction: column;
+    }
+    
+    .instituicao-header {
+        flex-direction: column;
+        gap: 10px;
+    }
+    
+    .instituicao-status {
+        width: 100%;
+        justify-content: space-between;
     }
 }
 </style>
