@@ -160,13 +160,13 @@ class SistemaRegistro {
                     
                     <div class="modal-body">
                         <div class="tabs">
-                            <button class="tab-button active" onclick="sistemaRegistro.mostrarAba('pendentes')">
+                            <button class="tab-button active" onclick="sistemaRegistro.mostrarAba('pendentes', event)">
                                 ⏳ Pendentes (${data.instituicoes.filter(i => i.estado === 'Pendente').length})
                             </button>
-                            <button class="tab-button" onclick="sistemaRegistro.mostrarAba('aprovadas')">
+                            <button class="tab-button" onclick="sistemaRegistro.mostrarAba('aprovadas', event)">
                                 ✅ Aprovadas (${data.instituicoes.filter(i => i.estado === 'Aprovada').length})
                             </button>
-                            <button class="tab-button" onclick="sistemaRegistro.mostrarAba('todas')">
+                            <button class="tab-button" onclick="sistemaRegistro.mostrarAba('todas', event)">
                                 📋 Todas (${data.instituicoes.length})
                             </button>
                         </div>
@@ -190,104 +190,118 @@ class SistemaRegistro {
             this.instituicoesData = data.instituicoes;
             
             // Mostrar aba padrão
-            this.mostrarAba('pendentes');
+            this.mostrarAba('pendentes', null);
 
         } catch (error) {
             console.error('Erro ao carregar gestão de instituições:', error);
             alert('Erro ao carregar gestão de instituições: ' + error.message);
         }
+        
     }
 
     /**
      * Mostra diferentes abas na gestão de instituições
      */
-    mostrarAba(aba) {
-        const conteudo = document.getElementById('abaConteudo');
-        if (!conteudo) return;
+    /**
+ * Mostra diferentes abas na gestão de instituições
+ */
+mostrarAba(aba, event = null) {
+    const conteudo = document.getElementById('abaConteudo');
+    if (!conteudo) return;
 
-        let instituicoesFiltradas = [];
-        let titulo = '';
+    let instituicoesFiltradas = [];
+    let titulo = '';
 
-        switch (aba) {
-            case 'pendentes':
-                instituicoesFiltradas = this.instituicoesData.filter(i => i.estado === 'Pendente');
-                titulo = 'Instituições Pendentes de Aprovação';
-                break;
-            case 'aprovadas':
-                instituicoesFiltradas = this.instituicoesData.filter(i => i.estado === 'Aprovada');
-                titulo = 'Instituições Aprovadas';
-                break;
-            case 'todas':
-                instituicoesFiltradas = this.instituicoesData;
-                titulo = 'Todas as Instituições';
-                break;
-        }
+    switch (aba) {
+        case 'pendentes':
+            instituicoesFiltradas = this.instituicoesData.filter(i => i.estado === 'Pendente');
+            titulo = 'Instituições Pendentes de Aprovação';
+            break;
+        case 'aprovadas':
+            instituicoesFiltradas = this.instituicoesData.filter(i => i.estado === 'Aprovada');
+            titulo = 'Instituições Aprovadas';
+            break;
+        case 'todas':
+            instituicoesFiltradas = this.instituicoesData;
+            titulo = 'Todas as Instituições';
+            break;
+    }
 
-        // Atualizar tabs ativas
+    // Atualizar tabs ativas (se event estiver disponível)
+    if (event) {
         document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
         event.target.classList.add('active');
-
-        if (instituicoesFiltradas.length === 0) {
-            conteudo.innerHTML = `
-                <div class="empty-state">
-                    <p>✅ Nenhuma instituição encontrada</p>
-                </div>
-            `;
-            return;
-        }
-
-        let html = `
-            <h4 style="margin-bottom: 20px; color: #2d5a27;">${titulo}</h4>
-            <div class="instituicoes-lista">
-        `;
-
-        instituicoesFiltradas.forEach(inst => {
-            const dataCriacao = new Date(inst.data_criacao).toLocaleDateString('pt-PT');
-            
-            html += `
-                <div class="instituicao-card" data-id="${inst.id}">
-                    <div class="instituicao-header">
-                        <h4>${inst.nome}</h4>
-                        <div class="instituicao-status">
-                            <span class="status-badge status-${inst.estado.toLowerCase()}">${inst.estado}</span>
-                            ${inst.pode_eliminar ? `
-                                <button class="btn btn-danger btn-small" onclick="sistemaRegistro.eliminarInstituicao(${inst.id}, '${inst.nome}')">
-                                    🗑️ Eliminar
-                                </button>
-                            ` : `
-                                <span class="badge-protected">🔒 Protegida</span>
-                            `}
-                        </div>
-                    </div>
-                    
-                    <div class="instituicao-details">
-                        <p><strong>Username:</strong> ${inst.username}</p>
-                        <p><strong>Email:</strong> ${inst.email}</p>
-                        <p><strong>Responsável:</strong> ${inst.responsavel}</p>
-                        <p><strong>Tipo:</strong> ${inst.tipo_instituicao}</p>
-                        ${inst.telefone ? `<p><strong>Telefone:</strong> ${inst.telefone}</p>` : ''}
-                        ${inst.documento_legal ? `<p><strong>Documento:</strong> ${inst.documento_legal}</p>` : ''}
-                        <p><strong>Data de Registo:</strong> ${dataCriacao}</p>
-                        ${inst.descricao ? `<p><strong>Descrição:</strong> ${inst.descricao}</p>` : ''}
-                    </div>
-                    
-                    ${inst.estado === 'Pendente' ? `
-                        <div class="instituicao-actions">
-                            <button class="btn btn-success" onclick="sistemaRegistro.aprovarInstituicao(${inst.id})">
-                                ✅ Aprovar
-                            </button>
-                            <button class="btn btn-danger" onclick="sistemaRegistro.rejeitarInstituicao(${inst.id})">
-                                ❌ Rejeitar
-                            </button>
-                        </div>
-                    ` : ''}
-                </div>
-            `;
+    } else {
+        // Fallback: atualizar baseado no nome da aba
+        document.querySelectorAll('.tab-button').forEach(btn => {
+            btn.classList.remove('active');
+            if (btn.textContent.includes(aba.charAt(0).toUpperCase() + aba.slice(1))) {
+                btn.classList.add('active');
+            }
         });
-
-        html += '</div>';
-        conteudo.innerHTML = html;
     }
+
+    if (instituicoesFiltradas.length === 0) {
+        conteudo.innerHTML = `
+            <div class="empty-state">
+                <p>✅ Nenhuma instituição encontrada</p>
+            </div>
+        `;
+        return;
+    }
+
+    let html = `
+        <h4 style="margin-bottom: 20px; color: #2d5a27;">${titulo}</h4>
+        <div class="instituicoes-lista">
+    `;
+
+    instituicoesFiltradas.forEach(inst => {
+        const dataCriacao = new Date(inst.data_criacao).toLocaleDateString('pt-PT');
+        
+        html += `
+            <div class="instituicao-card" data-id="${inst.id}">
+                <div class="instituicao-header">
+                    <h4>${inst.nome}</h4>
+                    <div class="instituicao-status">
+                        <span class="status-badge status-${inst.estado.toLowerCase()}">${inst.estado}</span>
+                        ${inst.pode_eliminar ? `
+                            <button class="btn btn-danger btn-small" onclick="sistemaRegistro.eliminarInstituicao(${inst.id}, '${inst.nome.replace(/'/g, "\\'")}')">
+                                🗑️ Eliminar
+                            </button>
+                        ` : `
+                            <span class="badge-protected">🔒 Protegida</span>
+                        `}
+                    </div>
+                </div>
+                
+                <div class="instituicao-details">
+                    <p><strong>Username:</strong> ${inst.username}</p>
+                    <p><strong>Email:</strong> ${inst.email}</p>
+                    <p><strong>Responsável:</strong> ${inst.responsavel}</p>
+                    <p><strong>Tipo:</strong> ${inst.tipo_instituicao}</p>
+                    ${inst.telefone ? `<p><strong>Telefone:</strong> ${inst.telefone}</p>` : ''}
+                    ${inst.documento_legal ? `<p><strong>Documento:</strong> ${inst.documento_legal}</p>` : ''}
+                    <p><strong>Data de Registo:</strong> ${dataCriacao}</p>
+                    ${inst.descricao ? `<p><strong>Descrição:</strong> ${inst.descricao}</p>` : ''}
+                </div>
+                
+                ${inst.estado === 'Pendente' ? `
+                    <div class="instituicao-actions">
+                        <button class="btn btn-success" onclick="sistemaRegistro.aprovarInstituicao(${inst.id})">
+                            ✅ Aprovar
+                        </button>
+                        <button class="btn btn-danger" onclick="sistemaRegistro.rejeitarInstituicao(${inst.id})">
+                            ❌ Rejeitar
+                        </button>
+                    </div>
+                ` : ''}
+            </div>
+        `;
+    });
+
+    html += '</div>';
+    conteudo.innerHTML = html;
+}
 
     /**
      * Atualiza contadores nas tabs
