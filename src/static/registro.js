@@ -196,112 +196,108 @@ class SistemaRegistro {
             console.error('Erro ao carregar gestão de instituições:', error);
             alert('Erro ao carregar gestão de instituições: ' + error.message);
         }
-        
     }
 
     /**
      * Mostra diferentes abas na gestão de instituições
      */
-    /**
- * Mostra diferentes abas na gestão de instituições
- */
-mostrarAba(aba, event = null) {
-    const conteudo = document.getElementById('abaConteudo');
-    if (!conteudo) return;
+    mostrarAba(aba, event = null) {
+        const conteudo = document.getElementById('abaConteudo');
+        if (!conteudo) return;
 
-    let instituicoesFiltradas = [];
-    let titulo = '';
+        let instituicoesFiltradas = [];
+        let titulo = '';
 
-    switch (aba) {
-        case 'pendentes':
-            instituicoesFiltradas = this.instituicoesData.filter(i => i.estado === 'Pendente');
-            titulo = 'Instituições Pendentes de Aprovação';
-            break;
-        case 'aprovadas':
-            instituicoesFiltradas = this.instituicoesData.filter(i => i.estado === 'Aprovada');
-            titulo = 'Instituições Aprovadas';
-            break;
-        case 'todas':
-            instituicoesFiltradas = this.instituicoesData;
-            titulo = 'Todas as Instituições';
-            break;
-    }
+        switch (aba) {
+            case 'pendentes':
+                instituicoesFiltradas = this.instituicoesData.filter(i => i.estado === 'Pendente');
+                titulo = 'Instituições Pendentes de Aprovação';
+                break;
+            case 'aprovadas':
+                instituicoesFiltradas = this.instituicoesData.filter(i => i.estado === 'Aprovada');
+                titulo = 'Instituições Aprovadas';
+                break;
+            case 'todas':
+                instituicoesFiltradas = this.instituicoesData;
+                titulo = 'Todas as Instituições';
+                break;
+        }
 
-    // Atualizar tabs ativas (se event estiver disponível)
-    if (event) {
-        document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
-        event.target.classList.add('active');
-    } else {
-        // Fallback: atualizar baseado no nome da aba
-        document.querySelectorAll('.tab-button').forEach(btn => {
-            btn.classList.remove('active');
-            if (btn.textContent.includes(aba.charAt(0).toUpperCase() + aba.slice(1))) {
-                btn.classList.add('active');
-            }
-        });
-    }
+        // Atualizar tabs ativas (se event estiver disponível)
+        if (event) {
+            document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
+            event.target.classList.add('active');
+        } else {
+            // Fallback: atualizar baseado no nome da aba
+            document.querySelectorAll('.tab-button').forEach(btn => {
+                btn.classList.remove('active');
+                if (btn.textContent.includes(aba.charAt(0).toUpperCase() + aba.slice(1))) {
+                    btn.classList.add('active');
+                }
+            });
+        }
 
-    if (instituicoesFiltradas.length === 0) {
-        conteudo.innerHTML = `
-            <div class="empty-state">
-                <p>✅ Nenhuma instituição encontrada</p>
-            </div>
+        if (instituicoesFiltradas.length === 0) {
+            conteudo.innerHTML = `
+                <div class="empty-state">
+                    <p>✅ Nenhuma instituição encontrada</p>
+                </div>
+            `;
+            return;
+        }
+
+        let html = `
+            <h4 style="margin-bottom: 20px; color: #2d5a27;">${titulo}</h4>
+            <div class="instituicoes-lista">
         `;
-        return;
-    }
 
-    let html = `
-        <h4 style="margin-bottom: 20px; color: #2d5a27;">${titulo}</h4>
-        <div class="instituicoes-lista">
-    `;
-
-    instituicoesFiltradas.forEach(inst => {
-        const dataCriacao = new Date(inst.data_criacao).toLocaleDateString('pt-PT');
-        
-        html += `
-            <div class="instituicao-card" data-id="${inst.id}">
-                <div class="instituicao-header">
-                    <h4>${inst.nome}</h4>
-                    <div class="instituicao-status">
-                        <span class="status-badge status-${inst.estado.toLowerCase()}">${inst.estado}</span>
-                        ${inst.pode_eliminar ? `
-                            <button class="btn btn-danger btn-small" onclick="sistemaRegistro.eliminarInstituicao(${inst.id}, '${inst.nome.replace(/'/g, "\\'")}')">
-                                🗑️ Eliminar
+        instituicoesFiltradas.forEach(inst => {
+            const dataCriacao = new Date(inst.data_criacao).toLocaleDateString('pt-PT');
+            
+            html += `
+                <div class="instituicao-card" data-id="${inst.id}">
+                    <div class="instituicao-header">
+                        <h4>${inst.nome}</h4>
+                        <div class="instituicao-status">
+                            <span class="status-badge status-${inst.estado.toLowerCase()}">${inst.estado}</span>
+                            ${inst.pode_eliminar ? `
+                                <button class="btn btn-danger btn-small" onclick="sistemaRegistro.eliminarInstituicao(${inst.id}, '${inst.nome.replace(/'/g, "\\'")}')">
+                                    🗑️ Eliminar
+                                </button>
+                            ` : `
+                                <span class="badge-protected">🔒 Protegida</span>
+                            `}
+                        </div>
+                    </div>
+                    
+                    <div class="instituicao-details">
+                        <p><strong>Username:</strong> ${inst.username}</p>
+                        <p><strong>Email:</strong> ${inst.email}</p>
+                        <p><strong>Responsável:</strong> ${inst.responsavel}</p>
+                        <p><strong>Tipo:</strong> ${inst.tipo_instituicao}</p>
+                        ${inst.telefone ? `<p><strong>Telefone:</strong> ${inst.telefone}</p>` : ''}
+                        ${inst.documento_legal ? `<p><strong>Documento:</strong> ${inst.documento_legal}</p>` : ''}
+                        <p><strong>Data de Registo:</strong> ${dataCriacao}</p>
+                        ${inst.descricao ? `<p><strong>Descrição:</strong> ${inst.descricao}</p>` : ''}
+                    </div>
+                    
+                    ${inst.estado === 'Pendente' ? `
+                        <div class="instituicao-actions">
+                            <button class="btn btn-success" onclick="sistemaRegistro.aprovarInstituicao(${inst.id})">
+                                ✅ Aprovar
                             </button>
-                        ` : `
-                            <span class="badge-protected">🔒 Protegida</span>
-                        `}
-                    </div>
+                            <button class="btn btn-danger" onclick="sistemaRegistro.rejeitarInstituicao(${inst.id})">
+                                ❌ Rejeitar
+                            </button>
+                        </div>
+                    ` : ''}
                 </div>
-                
-                <div class="instituicao-details">
-                    <p><strong>Username:</strong> ${inst.username}</p>
-                    <p><strong>Email:</strong> ${inst.email}</p>
-                    <p><strong>Responsável:</strong> ${inst.responsavel}</p>
-                    <p><strong>Tipo:</strong> ${inst.tipo_instituicao}</p>
-                    ${inst.telefone ? `<p><strong>Telefone:</strong> ${inst.telefone}</p>` : ''}
-                    ${inst.documento_legal ? `<p><strong>Documento:</strong> ${inst.documento_legal}</p>` : ''}
-                    <p><strong>Data de Registo:</strong> ${dataCriacao}</p>
-                    ${inst.descricao ? `<p><strong>Descrição:</strong> ${inst.descricao}</p>` : ''}
-                </div>
-                
-                ${inst.estado === 'Pendente' ? `
-                    <div class="instituicao-actions">
-                        <button class="btn btn-success" onclick="sistemaRegistro.aprovarInstituicao(${inst.id})">
-                            ✅ Aprovar
-                        </button>
-                        <button class="btn btn-danger" onclick="sistemaRegistro.rejeitarInstituicao(${inst.id})">
-                            ❌ Rejeitar
-                        </button>
-                    </div>
-                ` : ''}
-            </div>
-        `;
-    });
+            `;
+        });
 
-    html += '</div>';
-    conteudo.innerHTML = html;
-}
+        html += '</div>';
+        conteudo.innerHTML = html;
+    }
 
     /**
      * Atualiza contadores nas tabs
@@ -319,9 +315,129 @@ mostrarAba(aba, event = null) {
     }
 
     /**
+     * Recarrega a aba atualmente selecionada
+     */
+    recarregarAbaAtual() {
+        const abaAtiva = document.querySelector('.tab-button.active');
+        if (!abaAtiva) return;
+        
+        // Determinar qual aba está ativa baseado no texto
+        const textoAba = abaAtiva.textContent;
+        
+        if (textoAba.includes('Pendentes')) {
+            this.mostrarAba('pendentes', null);
+        } else if (textoAba.includes('Aprovadas')) {
+            this.mostrarAba('aprovadas', null);
+        } else if (textoAba.includes('Todas')) {
+            this.mostrarAba('todas', null);
+        }
+    }
+
+    /**
+     * Atualiza os dados da instituição após aprovação/rejeição
+     */
+    atualizarInstituicaoAposAcao(instituicaoId, aprovada) {
+        console.log('🔍 Atualizando instituição após ação:', instituicaoId, aprovada);
+        
+        // Encontrar a instituição nos dados
+        const instituicaoIndex = this.instituicoesData.findIndex(inst => inst.id === instituicaoId);
+        
+        if (instituicaoIndex !== -1) {
+            if (aprovada) {
+                // Se foi aprovada, atualizar o estado
+                this.instituicoesData[instituicaoIndex].aprovada = true;
+                this.instituicoesData[instituicaoIndex].estado = 'Aprovada';
+                console.log('✅ Instituição aprovada - atualizando estado');
+            } else {
+                // Se foi rejeitada, atualizar o estado
+                this.instituicoesData[instituicaoIndex].ativa = false;
+                this.instituicoesData[instituicaoIndex].estado = 'Rejeitada';
+                console.log('❌ Instituição rejeitada - atualizando estado');
+            }
+            
+            // Recarregar a aba atual
+            this.recarregarAbaAtual();
+            
+            // Atualizar contadores
+            this.atualizarContadoresTabs();
+            
+            console.log('🔄 Interface atualizada com sucesso');
+        } else {
+            console.log('⚠️ Instituição não encontrada nos dados:', instituicaoId);
+        }
+    }
+
+    /**
+     * Aprova uma instituição
+     */
+    async aprovarInstituicao(instituicaoId) {
+        console.log('🔍 Aprovar instituição:', instituicaoId);
+        console.log('📊 Dados antes:', this.instituicoesData.length, 'instituições');
+
+        if (!confirm('Tem certeza que deseja aprovar esta instituição?')) return;
+
+        try {
+            const response = await fetch(`/api/auth/admin/aprovar-instituicao/${instituicaoId}`, {
+                method: 'POST',
+                credentials: 'include'
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                // ✅ ATUALIZAÇÃO: Atualizar os dados localmente em vez de apenas remover o card
+                this.atualizarInstituicaoAposAcao(instituicaoId, true);
+                
+                this.mostrarNotificacao('Instituição aprovada com sucesso!', 'success');
+            } else {
+                throw new Error(data.error);
+            }
+        } catch (error) {
+            console.error('Erro ao aprovar instituição:', error);
+            this.mostrarNotificacao('Erro ao aprovar instituição: ' + error.message, 'error');
+        }
+    }
+
+    /**
+     * Rejeita uma instituição
+     */
+    async rejeitarInstituicao(instituicaoId) {
+        console.log('🔍 Rejeitar instituição:', instituicaoId);
+        console.log('📊 Dados antes:', this.instituicoesData.length, 'instituições');
+
+        const motivo = prompt('Motivo da rejeição:');
+        if (!motivo) return;
+
+        try {
+            const response = await fetch(`/api/auth/admin/rejeitar-instituicao/${instituicaoId}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ motivo }),
+                credentials: 'include'
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                // ✅ ATUALIZAÇÃO: Atualizar os dados localmente
+                this.atualizarInstituicaoAposAcao(instituicaoId, false);
+                
+                this.mostrarNotificacao('Instituição rejeitada', 'warning');
+            } else {
+                throw new Error(data.error);
+            }
+        } catch (error) {
+            console.error('Erro ao rejeitar instituição:', error);
+            this.mostrarNotificacao('Erro ao rejeitar instituição: ' + error.message, 'error');
+        }
+    }
+
+    /**
      * Elimina uma instituição
      */
     async eliminarInstituicao(instituicaoId, nomeInstituicao) {
+        console.log('🔍 Eliminar instituição:', instituicaoId);
+
         if (!confirm(`Tem certeza que deseja ELIMINAR a instituição "${nomeInstituicao}"?\n\n⚠️ Esta ação é irreversível e eliminará todos os dados associados.`)) {
             return;
         }
@@ -335,16 +451,13 @@ mostrarAba(aba, event = null) {
             const data = await response.json();
 
             if (data.success) {
-                // Remover card da lista
-                const card = document.querySelector(`[data-id="${instituicaoId}"]`);
-                if (card) {
-                    card.remove();
-                }
-                
-                // Atualizar a lista de instituições
+                // ✅ ATUALIZAÇÃO: Remover dos dados locais
                 this.instituicoesData = this.instituicoesData.filter(inst => inst.id !== instituicaoId);
                 
-                // Atualizar contadores nas tabs
+                // ✅ ATUALIZAÇÃO: Recarregar a aba atual
+                this.recarregarAbaAtual();
+                
+                // ✅ ATUALIZAÇÃO: Atualizar contadores
                 this.atualizarContadoresTabs();
                 
                 this.mostrarNotificacao(`Instituição "${nomeInstituicao}" eliminada com sucesso!`, 'success');
@@ -400,8 +513,6 @@ mostrarAba(aba, event = null) {
             errorDiv.style.display = 'none';
         }
     }
-
-    // ... (mantenha todas as outras funções existentes: mostrarFormularioRegistro, fecharModalRegistro, etc.)
 
     /**
      * Mostra o formulário de registro
@@ -589,95 +700,6 @@ mostrarAba(aba, event = null) {
     }
 
     /**
-     * Aprova uma instituição
-     */
-    async aprovarInstituicao(instituicaoId) {
-        if (!confirm('Tem certeza que deseja aprovar esta instituição?')) return;
-
-        try {
-            const response = await fetch(`/api/auth/admin/aprovar-instituicao/${instituicaoId}`, {
-                method: 'POST',
-                credentials: 'include'
-            });
-
-            const data = await response.json();
-
-            if (data.success) {
-                // Remover card da lista
-                const card = document.querySelector(`[data-id="${instituicaoId}"]`);
-                if (card) {
-                    card.remove();
-                }
-                this.mostrarNotificacao('Instituição aprovada com sucesso!', 'success');
-                
-                // Se não há mais instituições, mostrar estado vazio
-                const instituicoesContainer = document.querySelector('.instituicoes-pendentes');
-                if (instituicoesContainer && instituicoesContainer.children.length === 0) {
-                    const modalBody = document.querySelector('.modal-body');
-                    if (modalBody) {
-                        modalBody.innerHTML = `
-                            <div class="empty-state">
-                                <p>✅ Nenhuma instituição pendente de aprovação</p>
-                            </div>
-                        `;
-                    }
-                }
-            } else {
-                throw new Error(data.error);
-            }
-        } catch (error) {
-            console.error('Erro ao aprovar instituição:', error);
-            this.mostrarNotificacao('Erro ao aprovar instituição', 'error');
-        }
-    }
-
-    /**
-     * Rejeita uma instituição
-     */
-    async rejeitarInstituicao(instituicaoId) {
-        const motivo = prompt('Motivo da rejeição:');
-        if (!motivo) return;
-
-        try {
-            const response = await fetch(`/api/auth/admin/rejeitar-instituicao/${instituicaoId}`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ motivo }),
-                credentials: 'include'
-            });
-
-            const data = await response.json();
-
-            if (data.success) {
-                // Remover card da lista
-                const card = document.querySelector(`[data-id="${instituicaoId}"]`);
-                if (card) {
-                    card.remove();
-                }
-                this.mostrarNotificacao('Instituição rejeitada', 'warning');
-                
-                // Se não há mais instituições, mostrar estado vazio
-                const instituicoesContainer = document.querySelector('.instituicoes-pendentes');
-                if (instituicoesContainer && instituicoesContainer.children.length === 0) {
-                    const modalBody = document.querySelector('.modal-body');
-                    if (modalBody) {
-                        modalBody.innerHTML = `
-                            <div class="empty-state">
-                                <p>✅ Nenhuma instituição pendente de aprovação</p>
-                            </div>
-                        `;
-                    }
-                }
-            } else {
-                throw new Error(data.error);
-            }
-        } catch (error) {
-            console.error('Erro ao rejeitar instituição:', error);
-            this.mostrarNotificacao('Erro ao rejeitar instituição', 'error');
-        }
-    }
-
-    /**
      * Utilitários de interface
      */
     mostrarErros(erros) {
@@ -752,7 +774,6 @@ mostrarAba(aba, event = null) {
 // Instância global
 const sistemaRegistro = new SistemaRegistro();
 
-// CSS para o sistema de registro
 const registroCSS = `
 <style>
 .modal-overlay {
@@ -1134,3 +1155,6 @@ const registroCSS = `
 
 // Adicionar CSS ao documento
 document.head.insertAdjacentHTML('beforeend', registroCSS);
+
+// CSS para o sistema de registro (mantenha o mesmo CSS que você já tem)
+// ... [O CSS permanece exatamente igual] ...

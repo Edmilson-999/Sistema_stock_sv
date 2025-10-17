@@ -146,7 +146,7 @@ class RegistroService:
                 tipo_instituicao=dados['tipo_instituicao'],
                 documento_legal=dados.get('documento_legal', '').strip(),
                 descricao=dados.get('descricao', '').strip(),
-                ativa=False,  # Inicia inativa
+                ativa=True,  # Inicia inativa
                 aprovada=False  # Precisa aprovação
             )
             
