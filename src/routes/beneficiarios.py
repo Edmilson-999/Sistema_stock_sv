@@ -1,6 +1,7 @@
 from flask import Blueprint, request, jsonify
 from src.models.sistema_models import db, Beneficiario, MovimentoStock
 from src.routes.auth import login_required, get_current_instituicao
+from src.services.consulta_service import ConsultaService
 from sqlalchemy import or_
 
 beneficiarios_bp = Blueprint('beneficiarios', __name__)
@@ -8,15 +9,15 @@ beneficiarios_bp = Blueprint('beneficiarios', __name__)
 @beneficiarios_bp.route('/', methods=['GET'])
 @login_required
 def get_beneficiarios():
-    """Endpoint para obter a lista de beneficiários com pesquisa"""
+    """Endpoint para obter a lista de beneficiários da instituição atual"""
     try:
-        # Parâmetros de pesquisa
+        instituicao = get_current_instituicao()
         search = request.args.get('search', '').strip()
         page = int(request.args.get('page', 1))
         per_page = int(request.args.get('per_page', 20))
         
-        # Query base
-        query = Beneficiario.query
+        # Buscar apenas beneficiários registrados pela instituição atual
+        query = Beneficiario.query.filter_by(instituicao_registro_id=instituicao.id)
         
         # Aplicar filtro de pesquisa se fornecido
         if search:
@@ -39,9 +40,10 @@ def get_beneficiarios():
         beneficiarios_list = []
         for beneficiario in beneficiarios_paginated.items:
             beneficiario_dict = beneficiario.to_dict()
-            # Adicionar contagem de ajudas recebidas
+            # Adicionar contagem de ajudas recebidas (apenas da instituição atual)
             total_ajudas = MovimentoStock.query.filter_by(
                 beneficiario_nif=beneficiario.nif,
+                instituicao_id=instituicao.id,
                 tipo_movimento='saida'
             ).count()
             beneficiario_dict['total_ajudas'] = total_ajudas
@@ -63,21 +65,54 @@ def get_beneficiarios():
     except Exception as e:
         return jsonify({'error': f'Erro interno: {str(e)}'}), 500
 
+@beneficiarios_bp.route('/consulta/<nif>', methods=['GET'])
+@login_required
+def consultar_beneficiario(nif):
+    """Endpoint para consultar beneficiário por NIF (consulta cruzada)"""
+    try:
+        instituicao = get_current_instituicao()
+        
+        resultado = ConsultaService.consultar_beneficiario_por_nif(nif, instituicao.id)
+        
+        if resultado['encontrado']:
+            return jsonify({
+                'success': True,
+                'consulta': resultado
+            }), 200
+        else:
+            return jsonify({
+                'success': False,
+                'error': resultado.get('mensagem', resultado.get('erro', 'Beneficiário não encontrado'))
+            }), 404
+            
+    except Exception as e:
+        return jsonify({'error': f'Erro interno: {str(e)}'}), 500
+
 @beneficiarios_bp.route('/<nif>', methods=['GET'])
 @login_required
 def get_beneficiario(nif):
-    """Endpoint para obter detalhes de um beneficiário específico"""
+    """Endpoint para obter detalhes de um beneficiário específico da instituição atual"""
     try:
-        beneficiario = Beneficiario.query.get(nif)
+        instituicao = get_current_instituicao()
+        beneficiario = Beneficiario.query.filter_by(
+            nif=nif, 
+            instituicao_registro_id=instituicao.id
+        ).first()
         
         if not beneficiario:
             return jsonify({'error': 'Beneficiário não encontrado'}), 404
         
-        # Obter histórico completo de ajuda
-        historico = beneficiario.get_historico_ajuda()
+        # Obter histórico de ajuda apenas da instituição atual
+        historico = MovimentoStock.query.filter_by(
+            beneficiario_nif=nif,
+            instituicao_id=instituicao.id,
+            tipo_movimento='saida'
+        ).order_by(MovimentoStock.data.desc()).all()
+        
+        historico_dict = [movimento.to_dict() for movimento in historico]
         
         beneficiario_dict = beneficiario.to_dict()
-        beneficiario_dict['historico_ajuda'] = historico
+        beneficiario_dict['historico_ajuda'] = historico_dict
         beneficiario_dict['total_ajudas'] = len(historico)
         
         return jsonify({
@@ -91,50 +126,38 @@ def get_beneficiario(nif):
 @beneficiarios_bp.route('/', methods=['POST'])
 @login_required
 def create_beneficiario():
-    """Endpoint para criar um novo beneficiário"""
+    """Endpoint para criar um novo beneficiário associado à instituição atual"""
     try:
+        instituicao = get_current_instituicao()
         data = request.get_json()
         
         if not data or 'nif' not in data or 'nome' not in data:
             return jsonify({'error': 'NIF e nome são obrigatórios'}), 400
         
-        # Verificar se já existe um beneficiário com este NIF
-        if Beneficiario.query.get(data['nif']):
-            return jsonify({'error': 'Já existe um beneficiário com este NIF'}), 400
+        resultado = ConsultaService.registrar_novo_beneficiario(data, instituicao.id)
         
-        # Criar novo beneficiário
-        beneficiario = Beneficiario(
-            nif=data['nif'],
-            nome=data['nome'],
-            idade=data.get('idade'),
-            endereco=data.get('endereco'),
-            contacto=data.get('contacto'),
-            num_agregado=data.get('num_agregado'),
-            necessidades=data.get('necessidades'),
-            observacoes=data.get('observacoes'),
-            zona_residencia=data.get('zona_residencia'),
-            perdas_pedidos=data.get('perdas_pedidos')
-        )
-        
-        db.session.add(beneficiario)
-        db.session.commit()
-        
-        return jsonify({
-            'success': True,
-            'message': 'Beneficiário criado com sucesso',
-            'beneficiario': beneficiario.to_dict()
-        }), 201
+        if resultado['sucesso']:
+            return jsonify({
+                'success': True,
+                'message': 'Beneficiário criado com sucesso',
+                'beneficiario': resultado['beneficiario']
+            }), 201
+        else:
+            return jsonify({'error': resultado['erro']}), 400
         
     except Exception as e:
-        db.session.rollback()
         return jsonify({'error': f'Erro interno: {str(e)}'}), 500
 
 @beneficiarios_bp.route('/<nif>', methods=['PUT'])
 @login_required
 def update_beneficiario(nif):
-    """Endpoint para atualizar dados de um beneficiário"""
+    """Endpoint para atualizar dados de um beneficiário da instituição atual"""
     try:
-        beneficiario = Beneficiario.query.get(nif)
+        instituicao = get_current_instituicao()
+        beneficiario = Beneficiario.query.filter_by(
+            nif=nif,
+            instituicao_registro_id=instituicao.id
+        ).first()
         
         if not beneficiario:
             return jsonify({'error': 'Beneficiário não encontrado'}), 404
@@ -179,9 +202,15 @@ def update_beneficiario(nif):
 @beneficiarios_bp.route('/<nif>/historico', methods=['GET'])
 @login_required
 def get_historico_beneficiario(nif):
-    """Endpoint para obter apenas o histórico de ajuda de um beneficiário"""
+    """Endpoint para obter apenas o histórico de ajuda de um beneficiário da instituição atual"""
     try:
-        beneficiario = Beneficiario.query.get(nif)
+        instituicao = get_current_instituicao()
+        
+        # Verificar se o beneficiário pertence à instituição atual
+        beneficiario = Beneficiario.query.filter_by(
+            nif=nif,
+            instituicao_registro_id=instituicao.id
+        ).first()
         
         if not beneficiario:
             return jsonify({'error': 'Beneficiário não encontrado'}), 404
@@ -190,9 +219,10 @@ def get_historico_beneficiario(nif):
         page = int(request.args.get('page', 1))
         per_page = int(request.args.get('per_page', 10))
         
-        # Query dos movimentos de saída para este beneficiário
+        # Query dos movimentos de saída para este beneficiário (apenas da instituição atual)
         movimentos_query = MovimentoStock.query.filter_by(
             beneficiario_nif=nif,
+            instituicao_id=instituicao.id,
             tipo_movimento='saida'
         ).order_by(MovimentoStock.data.desc())
         
@@ -223,31 +253,78 @@ def get_historico_beneficiario(nif):
 @beneficiarios_bp.route('/stats', methods=['GET'])
 @login_required
 def get_beneficiarios_stats():
-    """Endpoint para obter estatísticas dos beneficiários"""
+    """Endpoint para obter estatísticas dos beneficiários da instituição atual"""
     try:
-        total_beneficiarios = Beneficiario.query.count()
+        instituicao = get_current_instituicao()
         
-        # Beneficiários que já receberam ajuda
+        # Total de beneficiários da instituição atual
+        total_beneficiarios = Beneficiario.query.filter_by(
+            instituicao_registro_id=instituicao.id
+        ).count()
+        
+        # Beneficiários que já receberam ajuda da instituição atual
         beneficiarios_com_ajuda = db.session.query(Beneficiario.nif).join(
-            MovimentoStock, Beneficiario.nif == MovimentoStock.beneficiario_nif
-        ).filter(MovimentoStock.tipo_movimento == 'saida').distinct().count()
+            MovimentoStock, 
+            (Beneficiario.nif == MovimentoStock.beneficiario_nif) &
+            (MovimentoStock.instituicao_id == instituicao.id)
+        ).filter(
+            MovimentoStock.tipo_movimento == 'saida'
+        ).distinct().count()
         
-        # Beneficiários por zona de residência
+        # Beneficiários por zona de residência (apenas da instituição atual)
         zonas_query = db.session.query(
             Beneficiario.zona_residencia,
             db.func.count(Beneficiario.nif).label('count')
+        ).filter(
+            Beneficiario.instituicao_registro_id == instituicao.id
         ).group_by(Beneficiario.zona_residencia).all()
         
         zonas_stats = [{'zona': zona or 'Não especificada', 'count': count} for zona, count in zonas_query]
         
-        # Distribuição por faixa etária
+        # Distribuição por faixa etária (apenas da instituição atual)
         faixas_etarias = [
-            {'faixa': '0-17', 'count': Beneficiario.query.filter(Beneficiario.idade.between(0, 17)).count()},
-            {'faixa': '18-35', 'count': Beneficiario.query.filter(Beneficiario.idade.between(18, 35)).count()},
-            {'faixa': '36-60', 'count': Beneficiario.query.filter(Beneficiario.idade.between(36, 60)).count()},
-            {'faixa': '60+', 'count': Beneficiario.query.filter(Beneficiario.idade > 60).count()},
-            {'faixa': 'Não informada', 'count': Beneficiario.query.filter(Beneficiario.idade.is_(None)).count()}
+            {
+                'faixa': '0-17', 
+                'count': Beneficiario.query.filter(
+                    Beneficiario.instituicao_registro_id == instituicao.id,
+                    Beneficiario.idade.between(0, 17)
+                ).count()
+            },
+            {
+                'faixa': '18-35', 
+                'count': Beneficiario.query.filter(
+                    Beneficiario.instituicao_registro_id == instituicao.id,
+                    Beneficiario.idade.between(18, 35)
+                ).count()
+            },
+            {
+                'faixa': '36-60', 
+                'count': Beneficiario.query.filter(
+                    Beneficiario.instituicao_registro_id == instituicao.id,
+                    Beneficiario.idade.between(36, 60)
+                ).count()
+            },
+            {
+                'faixa': '60+', 
+                'count': Beneficiario.query.filter(
+                    Beneficiario.instituicao_registro_id == instituicao.id,
+                    Beneficiario.idade > 60
+                ).count()
+            },
+            {
+                'faixa': 'Não informada', 
+                'count': Beneficiario.query.filter(
+                    Beneficiario.instituicao_registro_id == instituicao.id,
+                    Beneficiario.idade.is_(None)
+                ).count()
+            }
         ]
+        
+        # Estatísticas de ajuda da instituição atual
+        total_ajudas_instituicao = MovimentoStock.query.filter_by(
+            instituicao_id=instituicao.id,
+            tipo_movimento='saida'
+        ).count()
         
         return jsonify({
             'success': True,
@@ -255,9 +332,31 @@ def get_beneficiarios_stats():
                 'total_beneficiarios': total_beneficiarios,
                 'beneficiarios_com_ajuda': beneficiarios_com_ajuda,
                 'beneficiarios_sem_ajuda': total_beneficiarios - beneficiarios_com_ajuda,
+                'total_ajudas_instituicao': total_ajudas_instituicao,
                 'zonas_residencia': zonas_stats,
                 'faixas_etarias': faixas_etarias
             }
+        }), 200
+        
+    except Exception as e:
+        return jsonify({'error': f'Erro interno: {str(e)}'}), 500
+
+@beneficiarios_bp.route('/<nif>/historico-completo', methods=['GET'])
+@login_required
+def get_historico_completo_beneficiario(nif):
+    """Endpoint para obter histórico completo do beneficiário (todas as instituições)"""
+    try:
+        instituicao = get_current_instituicao()
+        
+        # Consulta cruzada para obter informações completas
+        resultado = ConsultaService.consultar_beneficiario_por_nif(nif, instituicao.id)
+        
+        if not resultado['encontrado']:
+            return jsonify({'error': 'Beneficiário não encontrado'}), 404
+        
+        return jsonify({
+            'success': True,
+            'consulta': resultado
         }), 200
         
     except Exception as e:

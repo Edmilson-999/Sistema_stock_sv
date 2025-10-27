@@ -1,6 +1,7 @@
 from flask import Blueprint, request, jsonify
 from src.models.sistema_models import db, ItemStock, MovimentoStock, Beneficiario
 from src.routes.auth import login_required, get_current_instituicao
+from src.services.consulta_service import ConsultaService
 from sqlalchemy import and_, or_
 from datetime import datetime, timedelta
 
@@ -213,7 +214,7 @@ def registar_entrada():
 @stock_bp.route('/saida', methods=['POST'])
 @login_required
 def registar_saida():
-    """Endpoint para registar saída de stock (entrega a beneficiário) com sistema de alertas"""
+    """Endpoint para registar saída de stock (entrega a beneficiário) com sistema de alertas e consulta cruzada"""
     try:
         data = request.get_json()
         
@@ -235,10 +236,17 @@ def registar_saida():
         if not item:
             return jsonify({'error': 'Item não encontrado'}), 404
         
-        # Verificar se o beneficiário existe
-        beneficiario = Beneficiario.query.get(beneficiario_nif)
-        if not beneficiario:
-            return jsonify({'error': 'Beneficiário não encontrado'}), 404
+        # CONSULTA CRUZADA: Verificar beneficiário no sistema completo
+        instituicao = get_current_instituicao()
+        
+        consulta = ConsultaService.consultar_beneficiario_por_nif(
+            beneficiario_nif, instituicao.id
+        )
+        
+        if not consulta['encontrado']:
+            return jsonify({
+                'error': 'Beneficiário não encontrado no sistema. Registre-o primeiro.'
+            }), 404
         
         # Verificar se há stock suficiente (stock total, não apenas da instituição)
         stock_total = item.get_stock_total()
@@ -254,26 +262,39 @@ def registar_saida():
             beneficiario_nif, item_id, quantidade
         )
         
+        # Adicionar alertas da consulta cruzada aos alertas do sistema
+        if consulta['avisos']:
+            if 'alertas' not in verificacao:
+                verificacao['alertas'] = []
+            verificacao['alertas'].extend(consulta['avisos'])
+        
         # Se há alertas e não foi forçada a distribuição, retornar alertas
-        if verificacao['alertas'] and not forcar_distribuicao:
+        if verificacao.get('alertas') and not forcar_distribuicao:
+            # Informações da consulta cruzada para o frontend
+            info_consulta = {
+                'beneficiario': consulta['beneficiario'],
+                'total_ajudas_geral': consulta['total_ajudas_instituicao_atual'] + consulta['total_ajudas_outras_instituicoes'],
+                'instituicoes_que_ajudaram': consulta['instituicoes_que_ajudaram'],
+                'total_ajudas_outras_instituicoes': consulta['total_ajudas_outras_instituicoes']
+            }
+            
             return jsonify({
                 'requer_confirmacao': True,
                 'alertas': verificacao['alertas'],
-                'sugestoes': verificacao['sugestoes'],
+                'sugestoes': verificacao.get('sugestoes', []),
                 'beneficiario': {
-                    'nome': beneficiario.nome,
-                    'nif': beneficiario.nif,
-                    'zona': beneficiario.zona_residencia
+                    'nome': consulta['beneficiario']['nome'],
+                    'nif': consulta['beneficiario']['nif'],
+                    'zona': consulta['beneficiario'].get('zona_residencia', '')
                 },
                 'item': {
                     'nome': item.nome,
                     'unidade': item.unidade
                 },
                 'quantidade_solicitada': quantidade,
+                'info_consulta': info_consulta,
                 'message': 'Confirme se deseja prosseguir com a distribuição apesar dos alertas.'
             }), 200
-        
-        instituicao = get_current_instituicao()
         
         # Criar movimento de saída
         movimento = MovimentoStock(
@@ -294,14 +315,19 @@ def registar_saida():
         resposta = {
             'success': True,
             'message': 'Saída registada com sucesso',
-            'movimento': movimento.to_dict()
+            'movimento': movimento.to_dict(),
+            'info_consulta': {
+                'beneficiario': consulta['beneficiario'],
+                'total_ajudas_geral': consulta['total_ajudas_instituicao_atual'] + consulta['total_ajudas_outras_instituicoes'],
+                'instituicoes_que_ajudaram': consulta['instituicoes_que_ajudaram']
+            }
         }
         
         # Adicionar alertas informativos se existirem (mesmo após distribuição)
-        if verificacao['alertas']:
+        if verificacao.get('alertas'):
             resposta['alertas_informativos'] = verificacao['alertas']
         
-        if verificacao['sugestoes']:
+        if verificacao.get('sugestoes'):
             resposta['sugestoes'] = verificacao['sugestoes']
         
         return jsonify(resposta), 201
@@ -363,6 +389,12 @@ def get_resumo_stock():
             MovimentoStock.data >= data_limite
         ).count()
         
+        # Beneficiários únicos atendidos por esta instituição
+        beneficiarios_unicos = db.session.query(MovimentoStock.beneficiario_nif).filter_by(
+            instituicao_id=instituicao.id,
+            tipo_movimento='saida'
+        ).distinct().count()
+        
         return jsonify({
             'success': True,
             'resumo': {
@@ -371,7 +403,8 @@ def get_resumo_stock():
                     'total_entradas': total_entradas_instituicao,
                     'total_saidas': total_saidas_instituicao,
                     'total_movimentos': total_movimentos,
-                    'movimentos_recentes': movimentos_recentes
+                    'movimentos_recentes': movimentos_recentes,
+                    'beneficiarios_unicos_atendidos': beneficiarios_unicos
                 }
             }
         }), 200
@@ -442,4 +475,101 @@ def update_movimento(movimento_id):
         
     except Exception as e:
         db.session.rollback()
+        return jsonify({'error': f'Erro interno: {str(e)}'}), 500
+
+@stock_bp.route('/consulta-rapida/<nif>', methods=['GET'])
+@login_required
+def consulta_rapida_beneficiario(nif):
+    """Endpoint para consulta rápida de beneficiário antes da distribuição"""
+    try:
+        instituicao = get_current_instituicao()
+        
+        resultado = ConsultaService.consultar_beneficiario_por_nif(nif, instituicao.id)
+        
+        if resultado['encontrado']:
+            return jsonify({
+                'success': True,
+                'consulta': resultado
+            }), 200
+        else:
+            return jsonify({
+                'success': False,
+                'error': resultado.get('mensagem', resultado.get('erro', 'Beneficiário não encontrado'))
+            }), 404
+            
+    except Exception as e:
+        return jsonify({'error': f'Erro interno: {str(e)}'}), 500
+
+@stock_bp.route('/estatisticas-distribuicao', methods=['GET'])
+@login_required
+def get_estatisticas_distribuicao():
+    """Endpoint para obter estatísticas de distribuição da instituição"""
+    try:
+        instituicao = get_current_instituicao()
+        
+        # Total de distribuições (saídas)
+        total_distribuicoes = MovimentoStock.query.filter_by(
+            instituicao_id=instituicao.id,
+            tipo_movimento='saida'
+        ).count()
+        
+        # Distribuições por categoria
+        distribuicoes_por_categoria = db.session.query(
+            ItemStock.categoria,
+            db.func.sum(MovimentoStock.quantidade).label('quantidade_total'),
+            db.func.count(MovimentoStock.id).label('total_distribuicoes')
+        ).join(
+            MovimentoStock, ItemStock.id == MovimentoStock.item_id
+        ).filter(
+            MovimentoStock.instituicao_id == instituicao.id,
+            MovimentoStock.tipo_movimento == 'saida'
+        ).group_by(ItemStock.categoria).all()
+        
+        # Top 5 beneficiários mais ajudados
+        top_beneficiarios = db.session.query(
+            Beneficiario.nome,
+            Beneficiario.nif,
+            db.func.count(MovimentoStock.id).label('total_ajudas')
+        ).join(
+            MovimentoStock, Beneficiario.nif == MovimentoStock.beneficiario_nif
+        ).filter(
+            MovimentoStock.instituicao_id == instituicao.id,
+            MovimentoStock.tipo_movimento == 'saida'
+        ).group_by(Beneficiario.nif, Beneficiario.nome
+        ).order_by(db.func.count(MovimentoStock.id).desc()
+        ).limit(5).all()
+        
+        # Distribuição por período (últimos 30 dias)
+        data_limite = datetime.utcnow() - timedelta(days=30)
+        distribuicoes_recentes = MovimentoStock.query.filter(
+            MovimentoStock.instituicao_id == instituicao.id,
+            MovimentoStock.tipo_movimento == 'saida',
+            MovimentoStock.data >= data_limite
+        ).count()
+        
+        return jsonify({
+            'success': True,
+            'estatisticas': {
+                'total_distribuicoes': total_distribuicoes,
+                'distribuicoes_recentes_30_dias': distribuicoes_recentes,
+                'distribuicoes_por_categoria': [
+                    {
+                        'categoria': cat.categoria or 'Outros',
+                        'quantidade_total': float(cat.quantidade_total or 0),
+                        'total_distribuicoes': cat.total_distribuicoes
+                    }
+                    for cat in distribuicoes_por_categoria
+                ],
+                'top_beneficiarios': [
+                    {
+                        'nome': ben.nome,
+                        'nif': ben.nif,
+                        'total_ajudas': ben.total_ajudas
+                    }
+                    for ben in top_beneficiarios
+                ]
+            }
+        }), 200
+        
+    except Exception as e:
         return jsonify({'error': f'Erro interno: {str(e)}'}), 500
