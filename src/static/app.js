@@ -351,6 +351,185 @@ function showBeneficiarioModal(beneficiario) {
     document.getElementById('genericModal').style.display = 'block';
 }
 
+// Função para o botão "Consultar Beneficiário"
+function showConsultarBeneficiario() {
+    const modalContent = `
+        <h2 style="margin-bottom: 25px; color: #2d5a27;">🔍 Consultar Beneficiário</h2>
+        
+        <form id="consultaBeneficiarioForm">
+            <div class="form-group">
+                <label>NIF do Beneficiário *</label>
+                <input type="text" id="consultaNif" required placeholder="Digite o NIF do beneficiário">
+            </div>
+            
+            <div style="display: flex; gap: 15px; margin-top: 30px;">
+                <button type="button" class="btn" onclick="consultarBeneficiarioPorNif()">
+                    🔍 Consultar
+                </button>
+                <button type="button" class="btn btn-secondary" onclick="closeModal()">
+                    ❌ Cancelar
+                </button>
+            </div>
+        </form>
+        
+        <div id="resultadoConsulta" style="margin-top: 20px; display: none;"></div>
+    `;
+    
+    document.getElementById('modalContent').innerHTML = modalContent;
+    document.getElementById('genericModal').style.display = 'block';
+}
+
+// Função para consultar beneficiário por NIF
+async function consultarBeneficiarioPorNif() {
+    const nif = document.getElementById('consultaNif').value.trim();
+    
+    if (!nif) {
+        showAlert('Por favor, digite o NIF do beneficiário', 'danger');
+        return;
+    }
+    
+    try {
+        console.log('🔍 Consultando beneficiário com NIF:', nif);
+        
+        const response = await fetch(`/api/beneficiarios/consultar_beneficiario?nif=${encodeURIComponent(nif)}`);
+        const data = await response.json();
+        
+        console.log('📊 Resposta da consulta:', data);
+        
+        const resultadoDiv = document.getElementById('resultadoConsulta');
+        
+        if (data.success) {
+            const beneficiario = data.consulta.beneficiario;
+            const totalAjudas = data.consulta.total_ajudas_instituicao_atual + data.consulta.total_ajudas_outras_instituicoes;
+            
+            resultadoDiv.innerHTML = `
+                <div class="alert alert-success">
+                    <h4>✅ Beneficiário Encontrado</h4>
+                    <p><strong>Nome:</strong> ${beneficiario.nome}</p>
+                    <p><strong>NIF:</strong> ${beneficiario.nif}</p>
+                    <p><strong>Idade:</strong> ${beneficiario.idade || 'Não informada'}</p>
+                    <p><strong>Zona:</strong> ${beneficiario.zona_residencia || 'Não informada'}</p>
+                    <p><strong>Total de Ajudas:</strong> ${totalAjudas}</p>
+                    <p><strong>Instituições que ajudaram:</strong> ${data.consulta.instituicoes_que_ajudaram.join(', ') || 'Nenhuma'}</p>
+                </div>
+                
+                ${data.consulta.avisos && data.consulta.avisos.length > 0 ? `
+                    <div class="alert alert-warning">
+                        <h5>⚠️ Alertas:</h5>
+                        <ul>
+                            ${data.consulta.avisos.map(alerta => `<li>${alerta}</li>`).join('')}
+                        </ul>
+                    </div>
+                ` : ''}
+            `;
+        } else {
+            resultadoDiv.innerHTML = `
+                <div class="alert alert-danger">
+                    <h4>❌ Beneficiário Não Encontrado</h4>
+                    <p>${data.error || 'Nenhum beneficiário encontrado com este NIF'}</p>
+                </div>
+            `;
+        }
+        
+        resultadoDiv.style.display = 'block';
+        
+    } catch (error) {
+        console.error('❌ Erro na consulta:', error);
+        showAlert('Erro de conexão na consulta', 'danger');
+    }
+}
+
+// Função para o botão "Consulta Rápida"
+function showConsultaRapida() {
+    const modalContent = `
+        <h2 style="margin-bottom: 25px; color: #2d5a27;">⚡ Consulta Rápida</h2>
+        
+        <form id="consultaRapidaForm">
+            <div class="form-group">
+                <label>Termo de Pesquisa *</label>
+                <input type="text" id="consultaTermo" required placeholder="Digite nome, NIF, zona ou contacto">
+                <small class="form-help">Pesquisa por nome, NIF, zona de residência ou contacto</small>
+            </div>
+            
+            <div style="display: flex; gap: 15px; margin-top: 30px;">
+                <button type="button" class="btn" onclick="executarConsultaRapida()">
+                    ⚡ Consultar
+                </button>
+                <button type="button" class="btn btn-secondary" onclick="closeModal()">
+                    ❌ Cancelar
+                </button>
+            </div>
+        </form>
+        
+        <div id="resultadoConsultaRapida" style="margin-top: 20px; display: none;"></div>
+    `;
+    
+    document.getElementById('modalContent').innerHTML = modalContent;
+    document.getElementById('genericModal').style.display = 'block';
+}
+
+// Função para executar consulta rápida
+async function executarConsultaRapida() {
+    const termo = document.getElementById('consultaTermo').value.trim();
+    
+    if (!termo) {
+        showAlert('Por favor, digite um termo para pesquisa', 'danger');
+        return;
+    }
+    
+    try {
+        console.log('⚡ Executando consulta rápida com termo:', termo);
+        
+        const response = await fetch(`/api/beneficiarios/consulta_rapida?search=${encodeURIComponent(termo)}`);
+        const data = await response.json();
+        
+        console.log('📊 Resposta da consulta rápida:', data);
+        
+        const resultadoDiv = document.getElementById('resultadoConsultaRapida');
+        
+        if (data.success && data.resultados && data.resultados.length > 0) {
+            let resultadosHtml = `
+                <div class="alert alert-success">
+                    <h4>✅ ${data.total_encontrado} Beneficiário(s) Encontrado(s)</h4>
+                </div>
+                
+                <div class="resultados-lista" style="max-height: 300px; overflow-y: auto;">
+            `;
+            
+            data.resultados.forEach(beneficiario => {
+                resultadosHtml += `
+                    <div class="beneficiario-item" style="border: 1px solid #ddd; padding: 15px; margin-bottom: 10px; border-radius: 8px;">
+                        <p><strong>Nome:</strong> ${beneficiario.nome}</p>
+                        <p><strong>NIF:</strong> ${beneficiario.nif}</p>
+                        <p><strong>Contacto:</strong> ${beneficiario.contacto || 'Não informado'}</p>
+                        <p><strong>Zona:</strong> ${beneficiario.zona_residencia || 'Não informada'}</p>
+                        <p><strong>Total de Ajudas:</strong> ${beneficiario.total_ajudas || 0}</p>
+                        <button class="btn btn-small" onclick="viewBeneficiario('${beneficiario.nif}')">
+                            👁️ Ver Detalhes
+                        </button>
+                    </div>
+                `;
+            });
+            
+            resultadosHtml += '</div>';
+            resultadoDiv.innerHTML = resultadosHtml;
+        } else {
+            resultadoDiv.innerHTML = `
+                <div class="alert alert-warning">
+                    <h4>⚠️ Nenhum Resultado</h4>
+                    <p>Nenhum beneficiário encontrado com o termo "${termo}"</p>
+                </div>
+            `;
+        }
+        
+        resultadoDiv.style.display = 'block';
+        
+    } catch (error) {
+        console.error('❌ Erro na consulta rápida:', error);
+        showAlert('Erro de conexão na consulta rápida', 'danger');
+    }
+}
+
 // Funções de stock
 async function loadMovimentosStock() {
     try {

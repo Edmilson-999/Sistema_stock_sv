@@ -6,6 +6,87 @@ from sqlalchemy import or_
 
 beneficiarios_bp = Blueprint('beneficiarios', __name__)
 
+@beneficiarios_bp.route('/consultar_beneficiario', methods=['GET'])
+@login_required
+def consultar_beneficiario_modal():
+    """Endpoint para consultar beneficiário via modal (sem NIF específico)"""
+    try:
+        nif = request.args.get('nif', '').strip()
+        
+        if not nif:
+            return jsonify({
+                'success': False,
+                'error': 'NIF é obrigatório para consulta'
+            }), 400
+        
+        instituicao = get_current_instituicao()
+        resultado = ConsultaService.consultar_beneficiario_por_nif(nif, instituicao.id)
+        
+        if resultado['encontrado']:
+            return jsonify({
+                'success': True,
+                'consulta': resultado
+            }), 200
+        else:
+            return jsonify({
+                'success': False,
+                'error': resultado.get('mensagem', resultado.get('erro', 'Beneficiário não encontrado'))
+            }), 404
+            
+    except Exception as e:
+        return jsonify({'error': f'Erro interno: {str(e)}'}), 500
+
+@beneficiarios_bp.route('/consulta_rapida', methods=['GET'])
+@login_required
+def consulta_rapida():
+    """Endpoint para consulta rápida de beneficiários"""
+    try:
+        search_term = request.args.get('search', '').strip()
+        
+        if not search_term:
+            return jsonify({
+                'success': False,
+                'error': 'Termo de pesquisa é obrigatório'
+            }), 400
+        
+        instituicao = get_current_instituicao()
+        
+        # Buscar beneficiários que correspondam ao termo de pesquisa
+        beneficiarios = Beneficiario.query.filter(
+            Beneficiario.instituicao_registro_id == instituicao.id
+        ).filter(
+            or_(
+                Beneficiario.nome.ilike(f'%{search_term}%'),
+                Beneficiario.nif.ilike(f'%{search_term}%'),
+                Beneficiario.zona_residencia.ilike(f'%{search_term}%'),
+                Beneficiario.contacto.ilike(f'%{search_term}%')
+            )
+        ).limit(10).all()
+        
+        resultados = []
+        for beneficiario in beneficiarios:
+            beneficiario_data = beneficiario.to_dict()
+            
+            # Adicionar estatísticas rápidas
+            total_ajudas = MovimentoStock.query.filter_by(
+                beneficiario_nif=beneficiario.nif,
+                instituicao_id=instituicao.id,
+                tipo_movimento='saida'
+            ).count()
+            
+            beneficiario_data['total_ajudas'] = total_ajudas
+            resultados.append(beneficiario_data)
+        
+        return jsonify({
+            'success': True,
+            'resultados': resultados,
+            'total_encontrado': len(resultados)
+        }), 200
+        
+    except Exception as e:
+        return jsonify({'error': f'Erro interno: {str(e)}'}), 500
+
+
 @beneficiarios_bp.route('/', methods=['GET'])
 @login_required
 def get_beneficiarios():

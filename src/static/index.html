@@ -660,18 +660,19 @@
                 </div>
             </div>
 
+            <!--Stock Sections-->
             <div id="stockSection" class="hidden">
                 <div class="table-container">
                     <h2 style="margin-bottom: 25px; color: #2d5a27;">📦 Gestão de Stock</h2>
                     
-                    <div style="display: flex; gap: 15px; margin-bottom: 25px;">
+                    <div class="actions-buttons" style="display: flex; gap: 15px; margin-bottom: 25px;">
                         <button class="btn" onclick="showRegistarEntrada()">⬆️ Registar Entrada</button>
                         <button class="btn btn-secondary" onclick="showRegistarSaida()">⬇️ Registar Saída</button>
                         <button class="btn" onclick="showResumoStock()">📊 Resumo Stock</button>
-                        <button class="btn" onclick="consultarBeneficiarioPorNIF()">🔍 Consultar Beneficiário</button>
-                        <button class="btn" onclick="consultaRapidaAntesSaida()">⚡ Consulta Rápida</button>
-                    </div>
-                    
+                        <button class="btn" onclick="showConsultarBeneficiario()">🔍 Consultar Beneficiário</button>
+                        <button class="btn" onclick="showConsultaRapida()">⚡ Consulta Rápida</button>
+                    </div>  
+
                     <div id="stockContent">
                         <div class="loading">Carregando informações de stock...</div>
                     </div>
