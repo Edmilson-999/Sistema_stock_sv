@@ -417,55 +417,76 @@ function displayMovimentosStock(movimentos) {
 
 async function showRegistarEntrada() {
     try {
+        console.log("🔄 A carregar itens para entrada...");
         const response = await fetch('/api/stock/itens');
         const data = await response.json();
         
-        if (data.success) {
-            showEntradaModal(data.itens);
+        console.log("Resposta da API /api/stock/itens:", data);
+
+        // CORREÇÃO: Verificar múltiplas possibilidades de estrutura
+        const itens = data.itens || data.data || [];
+
+        if (itens.length > 0) {
+            showEntradaModal(itens);
         } else {
-            showAlert('Erro ao carregar itens', 'danger');
+            console.error("Erro: Itens não carregados ou array vazio", data);
+            showAlert('Nenhum item disponível. É necessário criar itens primeiro.', 'warning');
         }
     } catch (error) {
         console.error('Erro ao carregar itens:', error);
-        showAlert('Erro de conexão', 'danger');
+        showAlert('Erro de conexão ao carregar itens', 'danger');
     }
 }
 
 function showEntradaModal(itens) {
-    let itensOptions = '<option value="">Selecione um item</option>';
-    itens.forEach(item => {
-        itensOptions += `<option value="${item.id}">${item.nome} (${item.unidade})</option>`;
-    });
+    console.log("Itens recebidos para entrada:", itens);
     
+    let itensOptions = '<option value="">Selecione um item</option>';
+    
+    if (Array.isArray(itens) && itens.length > 0) {
+        itens.forEach(item => {
+            // CORREÇÃO: Verificar múltiplas possibilidades de estrutura
+            const itemId = item.id || item.item_id;
+            const itemNome = item.nome || item.item_nome;
+            const itemUnidade = item.unidade || item.item_unidade || 'unidade';
+
+            if (itemId && itemNome) {
+                itensOptions += `<option value="${itemId}">${itemNome} (${itemUnidade})</option>`;
+            }
+        });
+    } else {
+        itensOptions += '<option value="" disabled>Nenhum item disponível</option>';
+    }
+
     const modalContent = `
         <h2 style="margin-bottom: 25px; color: #2d5a27;">⬆️ Registar Entrada de Stock</h2>
         
         <form id="entradaForm">
             <div class="form-group">
-                <label>Item</label>
-                <select id="entradaItem" required>
+                <label>Item *</label>
+                <select id="entradaItem" required style="width: 100%; padding: 12px; border: 2px solid #ddd; border-radius: 8px; font-size: 16px; background: white;">
                     ${itensOptions}
                 </select>
             </div>
             
             <div class="form-group">
-                <label>Quantidade</label>
-                <input type="number" id="entradaQuantidade" min="1" required>
+                <label>Quantidade *</label>
+                <input type="number" id="entradaQuantidade" min="1" required style="width: 100%; padding: 12px; border: 2px solid #ddd; border-radius: 8px; font-size: 16px;">
             </div>
             
             <div class="form-group">
                 <label>Origem da Doação</label>
-                <input type="text" id="entradaOrigem" placeholder="Ex: Empresa X, Particular, etc.">
+                <input type="text" id="entradaOrigem" placeholder="Ex: Empresa X, Particular, etc." style="width: 100%; padding: 12px; border: 2px solid #ddd; border-radius: 8px; font-size: 16px;">
             </div>
             
             <div class="form-group">
                 <label>Motivo</label>
-                <textarea id="entradaMotivo" rows="3" placeholder="Descrição da entrada..."></textarea>
+                <textarea id="entradaMotivo" rows="3" placeholder="Descrição da entrada..." style="width: 100%; padding: 12px; border: 2px solid #ddd; border-radius: 8px; font-size: 16px;"></textarea>
             </div>
             
             <div style="display: flex; gap: 15px; margin-top: 30px;">
-                <button type="button" class="btn" onclick="registarEntrada()">✅ Registar Entrada</button>
-                <button type="button" class="btn btn-secondary" onclick="closeModal()">❌ Cancelar</button>
+                <button type="button" class="btn" onclick="registarEntrada()" style="flex: 1; padding: 15px; font-size: 16px;">✅ Registar Entrada</button>
+                <button type="button" class="btn btn-secondary" onclick="closeModal()" style="flex: 1; padding: 15px; font-size: 16px;">❌ Cancelar</button>
             </div>
         </form>
     `;
@@ -517,6 +538,8 @@ async function registarEntrada() {
 
 async function showRegistarSaida() {
     try {
+        console.log("🔄 A carregar dados para saída...");
+        
         const [itensResponse, beneficiariosResponse] = await Promise.all([
             fetch('/api/stock/itens'),
             fetch('/api/beneficiarios')
@@ -525,61 +548,114 @@ async function showRegistarSaida() {
         const itensData = await itensResponse.json();
         const beneficiariosData = await beneficiariosResponse.json();
         
-        if (itensData.success && beneficiariosData.success) {
-            showSaidaModal(itensData.itens, beneficiariosData.beneficiarios);
+        console.log("Dados dos itens:", itensData);
+        console.log("Dados dos beneficiários:", beneficiariosData);
+
+        // CORREÇÃO: Verificar a estrutura real da resposta
+        const itens = itensData.itens || itensData.data || [];
+        const beneficiarios = beneficiariosData.beneficiarios || beneficiariosData.data || [];
+
+        if (itens.length > 0 && beneficiarios.length > 0) {
+            showSaidaModal(itens, beneficiarios);
         } else {
-            showAlert('Erro ao carregar dados', 'danger');
+            let errorMsg = 'Erro ao carregar dados: ';
+            if (itens.length === 0) errorMsg += 'Nenhum item disponível. ';
+            if (beneficiarios.length === 0) errorMsg += 'Nenhum beneficiário disponível.';
+            showAlert(errorMsg, 'danger');
         }
     } catch (error) {
         console.error('Erro ao carregar dados:', error);
-        showAlert('Erro de conexão', 'danger');
+        showAlert('Erro de conexão ao carregar dados', 'danger');
     }
 }
 
 function showSaidaModal(itens, beneficiarios) {
+    console.log("Itens para saída:", itens);
+    
     let itensOptions = '<option value="">Selecione um item</option>';
-    itens.forEach(item => {
-        if (item.stock_total > 0) {
-            itensOptions += `<option value="${item.id}">${item.nome} (${item.stock_total} ${item.unidade} disponíveis)</option>`;
-        }
-    });
-
     let beneficiariosOptions = '<option value="">Selecione um beneficiário</option>';
-    // Corrigido: beneficiarios é um array, não um objeto com .beneficiarios
-    beneficiarios.forEach(beneficiario => {
-        beneficiariosOptions += `<option value="${beneficiario.nif}">${beneficiario.nome} (${beneficiario.nif})</option>`;
-    });
+
+    if (Array.isArray(itens) && itens.length > 0) {
+        itens.forEach(item => {
+            const itemId = item.id;
+            const itemNome = item.nome;
+            const itemUnidade = item.unidade || 'unidade';
+            
+            // CORREÇÃO: Usar stock_instituicao se stock_total não estiver disponível
+            const stockTotal = item.stock_total || item.stock_instituicao || 0;
+
+            console.log(`Item: ${itemNome}, Stock Total: ${item.stock_total}, Stock Instituição: ${item.stock_instituicao}, Stock Final: ${stockTotal}`);
+
+            if (itemId && itemNome) {
+                // Mostrar todos os itens, mas destacar os sem stock
+                const disabled = stockTotal <= 0 ? 'disabled' : '';
+                const stockStyle = stockTotal <= 0 ? 'color: #999; font-style: italic;' : 'color: #2d5a27;';
+                const stockText = stockTotal > 0 ? `${stockTotal} ${itemUnidade} disponíveis` : 'SEM STOCK';
+                
+                itensOptions += `
+                    <option value="${itemId}" ${disabled} style="${stockStyle}">
+                        ${itemNome} (${stockText})
+                    </option>
+                `;
+            }
+        });
+    }
+
+    if (Array.isArray(beneficiarios) && beneficiarios.length > 0) {
+        beneficiarios.forEach(beneficiario => {
+            const nif = beneficiario.nif;
+            const nome = beneficiario.nome;
+
+            if (nif && nome) {
+                beneficiariosOptions += `<option value="${nif}">${nome} (${nif})</option>`;
+            }
+        });
+    }
 
     const modalContent = `
         <h2 style="margin-bottom: 25px; color: #2d5a27;">⬇️ Registar Saída de Stock</h2>
+        
+        <div style="margin-bottom: 20px; padding: 15px; background: #e8f5e8; border-radius: 8px; border-left: 4px solid #28a745;">
+            <strong>💡 Informação:</strong> 
+            <br>• Itens em <span style="color: #2d5a27;">verde</span> têm stock disponível
+            <br>• Itens em <span style="color: #999;">cinza</span> estão sem stock
+            <br>• Para usar itens sem stock, registe entradas primeiro
+        </div>
+        
         <form id="saidaForm">
             <div class="form-group">
-                <label>Item</label>
-                <select id="saidaItem" required>
+                <label>Item *</label>
+                <select id="saidaItem" required style="width: 100%; padding: 12px; border: 2px solid #ddd; border-radius: 8px; font-size: 16px; background: white;">
                     ${itensOptions}
                 </select>
             </div>
+            
             <div class="form-group">
-                <label>Quantidade</label>
-                <input type="number" id="saidaQuantidade" min="1" required>
+                <label>Quantidade *</label>
+                <input type="number" id="saidaQuantidade" min="1" required style="width: 100%; padding: 12px; border: 2px solid #ddd; border-radius: 8px; font-size: 16px;">
             </div>
+            
             <div class="form-group">
-                <label>Beneficiário</label>
-                <select id="saidaBeneficiario" required>
+                <label>Beneficiário *</label>
+                <select id="saidaBeneficiario" required style="width: 100%; padding: 12px; border: 2px solid #ddd; border-radius: 8px; font-size: 16px; background: white;">
                     ${beneficiariosOptions}
                 </select>
             </div>
+            
             <div class="form-group">
                 <label>Local de Entrega</label>
-                <input type="text" id="saidaLocal" placeholder="Ex: Casa do beneficiário, Centro de distribuição, etc.">
+                <input type="text" id="saidaLocal" placeholder="Ex: Casa do beneficiário, Centro de distribuição, etc." style="width: 100%; padding: 12px; border: 2px solid #ddd; border-radius: 8px; font-size: 16px;">
             </div>
+            
             <div class="form-group">
                 <label>Motivo</label>
-                <textarea id="saidaMotivo" rows="3" placeholder="Descrição da entrega..."></textarea>
+                <textarea id="saidaMotivo" rows="3" placeholder="Descrição da entrega..." style="width: 100%; padding: 12px; border: 2px solid #ddd; border-radius: 8px; font-size: 16px;"></textarea>
             </div>
+            
             <div style="display: flex; gap: 15px; margin-top: 30px;">
-                <button type="button" class="btn" onclick="registarSaida()">✅ Registar Saída</button>
-                <button type="button" class="btn btn-secondary" onclick="closeModal()">❌ Cancelar</button>
+                <button type="button" class="btn" onclick="registarSaida()" style="flex: 1; padding: 15px; font-size: 16px;">✅ Registar Saída</button>
+                <button type="button" class="btn" onclick="showRegistarEntrada()" style="flex: 1; padding: 15px; font-size: 16px;">📥 Registrar Entrada</button>
+                <button type="button" class="btn btn-secondary" onclick="closeModal()" style="flex: 1; padding: 15px; font-size: 16px;">❌ Cancelar</button>
             </div>
         </form>
     `;
@@ -617,7 +693,7 @@ async function registarSaida() {
         
         const data = await response.json();
         
-        if (data.success) {
+        if (data.success) { 
             showAlert('Saída registada com sucesso!', 'success');
             closeModal();
             loadMovimentosStock();
