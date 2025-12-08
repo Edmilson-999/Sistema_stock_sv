@@ -1,4 +1,5 @@
 from flask import Blueprint, request, jsonify, session
+from src.models.sistema_models import db, Instituicao, MovimentoStock, Beneficiario
 from src.models.sistema_models import db, Instituicao
 from src.services.registro_service import RegistroService
 from functools import wraps
@@ -371,7 +372,7 @@ def rejeitar_instituicao(instituicao_id):
 @auth_bp.route('/admin/eliminar-instituicao/<int:instituicao_id>', methods=['DELETE'])
 @admin_required
 def eliminar_instituicao(instituicao_id):
-    """Endpoint para eliminar uma instituição"""
+    """Endpoint para eliminar uma instituição - VERSÃO CORRIGIDA COM IMPORTAÇÕES"""
     try:
         current_instituicao = get_current_instituicao()
         
@@ -384,25 +385,73 @@ def eliminar_instituicao(instituicao_id):
         if not instituicao:
             return jsonify({'error': 'Instituição não encontrada'}), 404
         
+        print(f"🔍 Iniciando eliminação da instituição: {instituicao.nome} (ID: {instituicao_id})")
+        
+        # Verificar se há movimentos associados
+        movimentos_count = MovimentoStock.query.filter_by(instituicao_id=instituicao_id).count()
+        beneficiarios_count = Beneficiario.query.filter_by(instituicao_registro_id=instituicao_id).count()
+        
+        print(f"📊 Movimentos associados: {movimentos_count}")
+        print(f"📊 Beneficiários associados: {beneficiarios_count}")
+        
+        # ABORDAGEM CORRETA: Definir instituicao_id como NULL nos movimentos
+        if movimentos_count > 0:
+            print("🔄 Definindo instituicao_id como NULL nos movimentos...")
+            # Atualizar movimentos para remover a referência
+            movimentos = MovimentoStock.query.filter_by(instituicao_id=instituicao_id).all()
+            for movimento in movimentos:
+                movimento.instituicao_id = None  # ✅ AGORA PODE SER NULL
+                print(f"   ✅ Movimento {movimento.id} atualizado")
+            
+            db.session.flush()  # Forçar o UPDATE antes do DELETE
+        
+        # ABORDAGEM CORRETA: Transferir beneficiários para outra instituição
+        if beneficiarios_count > 0:
+            print("🔄 Transferindo beneficiários para a instituição admin...")
+            # Encontrar uma instituição admin para transferir os beneficiários
+            instituicao_admin = Instituicao.query.filter(
+                Instituicao.username.in_(['admin', 'caritas'])
+            ).first()
+            
+            if instituicao_admin:
+                print(f"   ✅ Transferindo para: {instituicao_admin.nome}")
+                # Transferir beneficiários para a instituição admin
+                beneficiarios = Beneficiario.query.filter_by(instituicao_registro_id=instituicao_id).all()
+                for beneficiario in beneficiarios:
+                    beneficiario.instituicao_registro_id = instituicao_admin.id
+                    print(f"   ✅ Beneficiário {beneficiario.nome} transferido")
+            else:
+                print("⚠️ Nenhuma instituição admin encontrada, mantendo beneficiários...")
+                # Se não há admin, manter os beneficiários (não fazer nada)
+                # Eles ficarão "órfãos" mas isso é melhor que erro
+        
         # Guardar informações para o log
         nome_instituicao = instituicao.nome
         username_instituicao = instituicao.username
         
-        # Eliminar a instituição
+        print("🗑️ Eliminando instituição...")
+        # AGORA podemos eliminar a instituição
         db.session.delete(instituicao)
         db.session.commit()
         
         print(f"✅ Instituição eliminada por {current_instituicao.nome}: {nome_instituicao} ({username_instituicao})")
+        print(f"📊 Estatísticas: {movimentos_count} movimentos atualizados, {beneficiarios_count} beneficiários transferidos")
         
         return jsonify({
             'success': True,
-            'message': f'Instituição {nome_instituicao} eliminada com sucesso'
+            'message': f'Instituição {nome_instituicao} eliminada com sucesso',
+            'stats': {
+                'movimentos_afetados': movimentos_count,
+                'beneficiarios_transferidos': beneficiarios_count
+            }
         }), 200
         
     except Exception as e:
         db.session.rollback()
+        print(f"❌ Erro detalhado ao eliminar instituição: {str(e)}")
+        import traceback
+        print(f"🔍 Stack trace: {traceback.format_exc()}")
         return jsonify({'error': f'Erro ao eliminar instituição: {str(e)}'}), 500
-
 
 @auth_bp.route('/admin/todas-instituicoes', methods=['GET'])
 @admin_required

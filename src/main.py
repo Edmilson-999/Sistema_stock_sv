@@ -1,6 +1,5 @@
 import os
 import sys
-# DON'T CHANGE THIS !!!
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 from flask import Flask, send_from_directory
@@ -9,6 +8,7 @@ from src.routes.auth import auth_bp
 from src.routes.beneficiarios import beneficiarios_bp
 from src.routes.stock import stock_bp
 from src.routes.dashboard import dashboard_bp
+from src.routes.relatorios import relatorios_bp
 from src.routes.alertas import alertas_bp
 
 app = Flask(__name__, static_folder=os.path.join(os.path.dirname(__file__), 'static'))
@@ -20,6 +20,7 @@ app.register_blueprint(beneficiarios_bp, url_prefix='/api/beneficiarios')
 app.register_blueprint(stock_bp, url_prefix='/api/stock')
 app.register_blueprint(dashboard_bp, url_prefix='/api/dashboard')
 app.register_blueprint(alertas_bp, url_prefix='/api/alertas')
+app.register_blueprint(relatorios_bp, url_prefix='/api/relatorios')
 
 # Configuração da base de dados
 app.config['SQLALCHEMY_DATABASE_URI'] = f"sqlite:///{os.path.join(os.path.dirname(__file__), 'database', 'app.db')}"

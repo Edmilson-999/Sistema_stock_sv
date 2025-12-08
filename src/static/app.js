@@ -194,6 +194,8 @@ function showStock() {
     hideAllSections();
     document.getElementById('stockSection').classList.remove('hidden');
     currentSection = 'stock';
+
+    setTimeout(adicionarBotaoRelatorios, 100);
     loadMovimentosStock();
 }
 
@@ -1148,3 +1150,882 @@ async function criarBeneficiario() {
         showAlert('Erro de conexão', 'danger');
     }
 }
+
+
+// ==================== ADICIONAR CSS DINAMICAMENTE ====================
+
+function adicionarCSSRelatorios() {
+    // Verificar se o CSS já foi adicionado
+    if (document.getElementById('css-relatorios')) {
+        return;
+    }
+    
+    const css = `
+    /* Estilos para o sistema de relatórios */
+    .relatorios-interface {
+        max-width: 900px;
+        max-height: 80vh;
+        overflow-y: auto;
+    }
+    
+    .tabs {
+        display: flex;
+        gap: 10px;
+        margin-bottom: 20px;
+        border-bottom: 2px solid #e8f5e8;
+        padding-bottom: 10px;
+    }
+    
+    .tab-button {
+        background: transparent;
+        border: 2px solid #e8f5e8;
+        padding: 10px 20px;
+        border-radius: 25px;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        color: #5a7c76;
+        font-weight: 600;
+    }
+    
+    .tab-button:hover {
+        border-color: #11998e;
+        color: #11998e;
+    }
+    
+    .tab-button.active {
+        background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+        border-color: #11998e;
+        color: white;
+    }
+    
+    .relatorio-card {
+        border: 1px solid #e8f5e8;
+        border-radius: 10px;
+        padding: 15px;
+        margin-bottom: 10px;
+        background: white;
+        transition: all 0.3s ease;
+    }
+    
+    .relatorio-card:hover {
+        box-shadow: 0 5px 15px rgba(17, 153, 142, 0.1);
+        transform: translateY(-2px);
+    }
+    
+    .periodo-card {
+        border: 1px solid #e8f5e8;
+        border-radius: 10px;
+        padding: 15px;
+        background: white;
+        transition: all 0.3s ease;
+    }
+    
+    .periodo-card:hover {
+        box-shadow: 0 5px 15px rgba(17, 153, 142, 0.1);
+        transform: translateY(-2px);
+        border-color: #11998e;
+    }
+    
+    .stat-card-small {
+        background: white;
+        border: 1px solid #e8f5e8;
+        border-radius: 10px;
+        padding: 15px;
+        text-align: center;
+    }
+    
+    .stat-card-small .stat-number {
+        font-size: 24px;
+        font-weight: bold;
+        color: #2d5a27;
+        margin-bottom: 5px;
+    }
+    
+    .stat-card-small .stat-label {
+        font-size: 14px;
+        color: #5a7c76;
+    }
+    
+    .gerar-relatorio-form {
+        max-width: 500px;
+        margin: 0 auto;
+    }
+    
+    .form-check {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+    
+    .form-check input {
+        width: auto;
+    }
+    
+    .impressao-relatorio {
+        background: white;
+        padding: 30px;
+        border-radius: 10px;
+        max-width: 800px;
+        margin: 0 auto;
+    }
+    
+    @media print {
+        .impressao-relatorio {
+            box-shadow: none;
+            border: none;
+            padding: 0;
+        }
+        
+        .no-print {
+            display: none !important;
+        }
+    }
+    `;
+    
+    const style = document.createElement('style');
+    style.id = 'css-relatorios';
+    style.textContent = css;
+    document.head.appendChild(style);
+    
+    console.log('✅ CSS para relatórios adicionado');
+}
+
+// Chamar a função quando a página carregar
+document.addEventListener('DOMContentLoaded', function() {
+    setTimeout(adicionarCSSRelatorios, 1000);
+});
+
+// ==================== SISTEMA DE RELATÓRIOS ====================
+
+// Função para mostrar a interface de relatórios
+function showRelatoriosInterface() {
+    // Garantir que o CSS está carregado
+    adicionarCSSRelatorios();
+    const modalContent = `
+        <div class="relatorios-interface">
+            <h2 style="margin-bottom: 25px; color: #2d5a27;">📊 Sistema de Relatórios Mensais</h2>
+            
+            <div class="tabs" style="margin-bottom: 20px;">
+                <button class="tab-button active" onclick="mostrarAbaRelatorios('gerar')">
+                    📅 Gerar Novo
+                </button>
+                <button class="tab-button" onclick="mostrarAbaRelatorios('listar')">
+                    📋 Relatórios Salvos
+                </button>
+                <button class="tab-button" onclick="mostrarAbaRelatorios('periodos')">
+                    📅 Períodos Disponíveis
+                </button>
+            </div>
+            
+            <div id="abaRelatoriosConteudo">
+                <!-- Conteúdo será carregado aqui -->
+            </div>
+        </div>
+    `;
+    
+    document.getElementById('modalContent').innerHTML = modalContent;
+    document.getElementById('genericModal').style.display = 'block';
+    
+    // Carregar aba inicial
+    mostrarAbaRelatorios('gerar');
+}
+
+// Função para alternar abas
+function mostrarAbaRelatorios(aba) {
+    document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
+    event.target.classList.add('active');
+    
+    const conteudo = document.getElementById('abaRelatoriosConteudo');
+    
+    switch(aba) {
+        case 'gerar':
+            carregarInterfaceGerarRelatorio();
+            break;
+        case 'listar':
+            carregarRelatoriosSalvos();
+            break;
+        case 'periodos':
+            carregarPeriodosDisponiveis();
+            break;
+    }
+}
+
+// Interface para gerar novo relatório
+async function carregarInterfaceGerarRelatorio() {
+    const conteudo = document.getElementById('abaRelatoriosConteudo');
+    const dataAtual = new Date();
+    const anoAtual = dataAtual.getFullYear();
+    const mesAtual = dataAtual.getMonth() + 1; // Janeiro = 1
+    
+    const meses = [
+        'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+        'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
+    ];
+    
+    let opcoesMes = '';
+    for (let i = 0; i < meses.length; i++) {
+        const selecionado = (i + 1) === mesAtual ? 'selected' : '';
+        opcoesMes += `<option value="${i + 1}" ${selecionado}>${meses[i]}</option>`;
+    }
+    
+    let opcoesAno = '';
+    for (let ano = anoAtual; ano >= anoAtual - 5; ano--) {
+        const selecionado = ano === anoAtual ? 'selected' : '';
+        opcoesAno += `<option value="${ano}" ${selecionado}>${ano}</option>`;
+    }
+    
+    conteudo.innerHTML = `
+        <div class="gerar-relatorio-form">
+            <h3 style="margin-bottom: 20px; color: #2d5a27;">📅 Gerar Relatório Mensal</h3>
+            
+            <form id="formGerarRelatorio">
+                <div class="form-group">
+                    <label>Mês</label>
+                    <select id="relatorioMes" required>
+                        ${opcoesMes}
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label>Ano</label>
+                    <select id="relatorioAno" required>
+                        ${opcoesAno}
+                    </select>
+                </div>
+                
+                <div class="form-check" style="margin: 15px 0;">
+                    <input type="checkbox" id="salvarRelatorio" checked>
+                    <label for="salvarRelatorio">Salvar relatório no sistema</label>
+                </div>
+                
+                <div style="display: flex; gap: 15px; margin-top: 25px;">
+                    <button type="button" class="btn" onclick="gerarRelatorioMensal()">
+                        📊 Gerar Relatório
+                    </button>
+                    <button type="button" class="btn btn-secondary" onclick="closeModal()">
+                        ❌ Cancelar
+                    </button>
+                </div>
+            </form>
+            
+            <div id="resultadoGeracao" style="margin-top: 20px; display: none;"></div>
+        </div>
+    `;
+}
+
+// Função para gerar relatório
+async function gerarRelatorioMensal() {
+    const mes = document.getElementById('relatorioMes').value;
+    const ano = document.getElementById('relatorioAno').value;
+    const salvar = document.getElementById('salvarRelatorio').checked;
+    
+    try {
+        const response = await fetch('/api/relatorios/mensal/gerar', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                ano: parseInt(ano),
+                mes: parseInt(mes),
+                salvar: salvar
+            })
+        });
+        
+        const data = await response.json();
+        const resultadoDiv = document.getElementById('resultadoGeracao');
+        
+        if (data.success) {
+            resultadoDiv.innerHTML = `
+                <div class="alert alert-success">
+                    <h4>✅ Relatório Gerado com Sucesso!</h4>
+                    <p><strong>Período:</strong> ${mes}/${ano}</p>
+                    <p><strong>Total de Movimentos:</strong> ${data.relatorio.resumo.total_movimentos}</p>
+                    <p><strong>Entradas:</strong> ${data.relatorio.resumo.total_entradas}</p>
+                    <p><strong>Saídas:</strong> ${data.relatorio.resumo.total_saidas}</p>
+                    
+                    <div style="margin-top: 20px;">
+                        <button class="btn" onclick="visualizarRelatorio(${ano}, ${mes})">
+                            👁️ Visualizar Relatório
+                        </button>
+                        <button class="btn" onclick="imprimirRelatorioGerado(${ano}, ${mes})">
+                            🖨️ Imprimir
+                        </button>
+                    </div>
+                </div>
+            `;
+        } else {
+            resultadoDiv.innerHTML = `
+                <div class="alert alert-danger">
+                    <h4>❌ Erro ao Gerar Relatório</h4>
+                    <p>${data.error || 'Erro desconhecido'}</p>
+                </div>
+            `;
+        }
+        
+        resultadoDiv.style.display = 'block';
+        
+    } catch (error) {
+        console.error('Erro ao gerar relatório:', error);
+        showAlert('Erro de conexão ao gerar relatório', 'danger');
+    }
+}
+
+// Função para visualizar relatório
+async function visualizarRelatorio(ano, mes) {
+    try {
+        const response = await fetch(`/api/relatorios/mensal/por-mes/${ano}/${mes}`);
+        const data = await response.json();
+        
+        if (data.success) {
+            mostrarRelatorioDetalhado(data.relatorio, data.existe);
+        } else {
+            showAlert('Erro ao carregar relatório: ' + data.error, 'danger');
+        }
+    } catch (error) {
+        console.error('Erro ao visualizar relatório:', error);
+        showAlert('Erro de conexão', 'danger');
+    }
+}
+
+// Função para mostrar relatório detalhado
+function mostrarRelatorioDetalhado(relatorio, existe) {
+    const meses = [
+        'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+        'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
+    ];
+    
+    const mesNome = meses[relatorio.mes - 1] || `Mês ${relatorio.mes}`;
+    
+    let entradasHTML = '';
+    if (relatorio.dados.entradas && relatorio.dados.entradas.lista.length > 0) {
+        entradasHTML = `
+            <h4 style="margin-top: 20px; margin-bottom: 10px; color: #2d5a27;">📥 Entradas do Mês (${relatorio.dados.entradas.lista.length})</h4>
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Data</th>
+                        <th>Item</th>
+                        <th>Quantidade</th>
+                        <th>Origem</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${relatorio.dados.entradas.lista.map(entrada => `
+                        <tr>
+                            <td>${entrada.data}</td>
+                            <td>${entrada.item}</td>
+                            <td>${entrada.quantidade} ${entrada.unidade}</td>
+                            <td>${entrada.origem}</td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+        `;
+    } else {
+        entradasHTML = '<p>Nenhuma entrada registada neste mês.</p>';
+    }
+    
+    let saidasHTML = '';
+    if (relatorio.dados.saidas && relatorio.dados.saidas.lista.length > 0) {
+        saidasHTML = `
+            <h4 style="margin-top: 20px; margin-bottom: 10px; color: #2d5a27;">📤 Saídas do Mês (${relatorio.dados.saidas.lista.length})</h4>
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Data</th>
+                        <th>Item</th>
+                        <th>Quantidade</th>
+                        <th>Beneficiário</th>
+                        <th>Observações</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${relatorio.dados.saidas.lista.map(saida => `
+                        <tr>
+                            <td>${saida.data}</td>
+                            <td>${saida.item}</td>
+                            <td>${saida.quantidade} ${saida.unidade}</td>
+                            <td>${saida.beneficiario}</td>
+                            <td>${saida.observacoes || '-'}</td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+        `;
+    } else {
+        saidasHTML = '<p>Nenhuma saída registada neste mês.</p>';
+    }
+    
+    const modalContent = `
+        <div class="relatorio-detalhado">
+            <h2 style="margin-bottom: 25px; color: #2d5a27;">
+                📊 Relatório Mensal – ${mesNome}/${relatorio.ano}
+                ${existe ? '<span class="badge badge-success" style="font-size: 0.7em; margin-left: 10px;">SALVO</span>' : ''}
+            </h2>
+            
+            <div class="resumo-relatorio" style="background: #f8f9fa; padding: 20px; border-radius: 10px; margin-bottom: 25px;">
+                <h4>📈 Estatísticas do Mês</h4>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-top: 15px;">
+                    <div class="stat-card-small">
+                        <div class="stat-number">${relatorio.dados.resumo.total_movimentos}</div>
+                        <div class="stat-label">Total de Movimentos</div>
+                    </div>
+                    <div class="stat-card-small">
+                        <div class="stat-number">${relatorio.dados.resumo.total_entradas}</div>
+                        <div class="stat-label">Entradas</div>
+                    </div>
+                    <div class="stat-card-small">
+                        <div class="stat-number">${relatorio.dados.resumo.total_saidas}</div>
+                        <div class="stat-label">Saídas</div>
+                    </div>
+                    <div class="stat-card-small">
+                        <div class="stat-number">${relatorio.dados.resumo.beneficiarios_atendidos}</div>
+                        <div class="stat-label">Beneficiários Atendidos</div>
+                    </div>
+                </div>
+                
+                <div style="margin-top: 20px; padding-top: 15px; border-top: 1px solid #ddd;">
+                    <p><strong>Quantidade Total Entrada:</strong> ${relatorio.dados.resumo.quantidade_total_entradas}</p>
+                    <p><strong>Quantidade Total Saída:</strong> ${relatorio.dados.resumo.quantidade_total_saidas}</p>
+                    <p><strong>Saldo do Mês:</strong> <span class="${relatorio.dados.resumo.saldo_mensal >= 0 ? 'text-success' : 'text-danger'}">${relatorio.dados.resumo.saldo_mensal}</span></p>
+                </div>
+            </div>
+            
+            ${entradasHTML}
+            ${saidasHTML}
+            
+            <div style="display: flex; gap: 15px; margin-top: 30px; flex-wrap: wrap;">
+                <button class="btn" onclick="imprimirRelatorio(${relatorio.id})">
+                    🖨️ Imprimir Relatório
+                </button>
+                <button class="btn btn-secondary" onclick="closeModal()">
+                    ❌ Fechar
+                </button>
+            </div>
+        </div>
+    `;
+    
+    document.getElementById('modalContent').innerHTML = modalContent;
+    document.getElementById('genericModal').style.display = 'block';
+}
+
+// Função para carregar relatórios salvos
+async function carregarRelatoriosSalvos() {
+    const conteudo = document.getElementById('abaRelatoriosConteudo');
+    
+    try {
+        const response = await fetch('/api/relatorios/mensal/listar');
+        const data = await response.json();
+        
+        if (data.success) {
+            if (data.relatorios.length > 0) {
+                let relatoriosHTML = `
+                    <h3 style="margin-bottom: 20px; color: #2d5a27;">📋 Relatórios Salvos</h3>
+                    <p>Total: ${data.relatorios.length} relatório(s) salvo(s)</p>
+                    
+                    <div class="relatorios-lista" style="max-height: 400px; overflow-y: auto; margin-top: 20px;">
+                `;
+                
+                data.relatorios.forEach(relatorio => {
+                    relatoriosHTML += `
+                        <div class="relatorio-card" style="border: 1px solid #ddd; padding: 15px; margin-bottom: 10px; border-radius: 8px;">
+                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                                <div>
+                                    <h4 style="margin: 0; color: #2d5a27;">${relatorio.mes_nome}/${relatorio.ano}</h4>
+                                    <small>Gerado em: ${new Date(relatorio.data_geracao).toLocaleDateString('pt-PT')}</small>
+                                </div>
+                                <div style="text-align: right;">
+                                    <span class="badge badge-success">${relatorio.movimentos_count} movimentos</span><br>
+                                    <span class="badge badge-info">Entradas: ${relatorio.total_entradas}</span>
+                                    <span class="badge badge-warning">Saídas: ${relatorio.total_saidas}</span>
+                                </div>
+                            </div>
+                            
+                            <div style="display: flex; gap: 10px; margin-top: 15px;">
+                                <button class="btn btn-small" onclick="visualizarRelatorio(${relatorio.ano}, ${relatorio.mes})">
+                                    👁️ Visualizar
+                                </button>
+                                <button class="btn btn-small" onclick="imprimirRelatorio(${relatorio.id})">
+                                    🖨️ Imprimir
+                                </button>
+                                <button class="btn btn-small btn-secondary" onclick="gerarNovamenteRelatorio(${relatorio.ano}, ${relatorio.mes})">
+                                    🔄 Regenerar
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                });
+                
+                relatoriosHTML += '</div>';
+                conteudo.innerHTML = relatoriosHTML;
+            } else {
+                conteudo.innerHTML = `
+                    <div class="alert alert-warning">
+                        <h4>📭 Nenhum Relatório Salvo</h4>
+                        <p>Não existem relatórios salvos no sistema.</p>
+                        <p>Gere um novo relatório usando a aba "Gerar Novo".</p>
+                    </div>
+                `;
+            }
+        } else {
+            conteudo.innerHTML = `
+                <div class="alert alert-danger">
+                    <h4>❌ Erro ao Carregar Relatórios</h4>
+                    <p>${data.error || 'Erro desconhecido'}</p>
+                </div>
+            `;
+        }
+    } catch (error) {
+        console.error('Erro ao carregar relatórios:', error);
+        conteudo.innerHTML = `
+            <div class="alert alert-danger">
+                <h4>❌ Erro de Conexão</h4>
+                <p>Não foi possível carregar os relatórios salvos.</p>
+            </div>
+        `;
+    }
+}
+
+// Função para carregar períodos disponíveis
+async function carregarPeriodosDisponiveis() {
+    const conteudo = document.getElementById('abaRelatoriosConteudo');
+    
+    try {
+        const response = await fetch('/api/relatorios/mensal/periodos-disponiveis');
+        const data = await response.json();
+        
+        if (data.success) {
+            if (data.periodos.length > 0) {
+                let periodosHTML = `
+                    <h3 style="margin-bottom: 20px; color: #2d5a27;">📅 Períodos com Dados Disponíveis</h3>
+                    <p>Total: ${data.periodos.length} período(s) com movimentos registados</p>
+                    
+                    <div class="periodos-lista" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 15px; margin-top: 20px;">
+                `;
+                
+                data.periodos.forEach(periodo => {
+                    periodosHTML += `
+                        <div class="periodo-card" style="border: 1px solid #ddd; padding: 15px; border-radius: 8px; text-align: center; cursor: pointer;" onclick="visualizarRelatorio(${periodo.ano}, ${periodo.mes})">
+                            <div style="font-size: 2em; margin-bottom: 10px;">📅</div>
+                            <h4 style="margin: 0; color: #2d5a27;">${periodo.mes_nome}/${periodo.ano}</h4>
+                            <small>Clique para gerar relatório</small>
+                        </div>
+                    `;
+                });
+                
+                periodosHTML += '</div>';
+                conteudo.innerHTML = periodosHTML;
+            } else {
+                conteudo.innerHTML = `
+                    <div class="alert alert-warning">
+                        <h4>📭 Nenhum Dado Disponível</h4>
+                        <p>Não existem movimentos registados no sistema.</p>
+                        <p>Registe algumas entradas e saídas para poder gerar relatórios.</p>
+                    </div>
+                `;
+            }
+        } else {
+            conteudo.innerHTML = `
+                <div class="alert alert-danger">
+                    <h4>❌ Erro ao Carregar Períodos</h4>
+                    <p>${data.error || 'Erro desconhecido'}</p>
+                </div>
+            `;
+        }
+    } catch (error) {
+        console.error('Erro ao carregar períodos:', error);
+        conteudo.innerHTML = `
+            <div class="alert alert-danger">
+                <h4>❌ Erro de Conexão</h4>
+                <p>Não foi possível carregar os períodos disponíveis.</p>
+            </div>
+        `;
+    }
+}
+
+// Função para imprimir relatório
+async function imprimirRelatorio(relatorioId) {
+    try {
+        const response = await fetch(`/api/relatorios/mensal/${relatorioId}/imprimir`);
+        const data = await response.json();
+        
+        if (data.success) {
+            mostrarRelatorioParaImpressao(data.para_impressao);
+        } else {
+            showAlert('Erro ao preparar impressão: ' + data.error, 'danger');
+        }
+    } catch (error) {
+        console.error('Erro ao imprimir relatório:', error);
+        showAlert('Erro de conexão', 'danger');
+    }
+}
+
+// Função para mostrar relatório formatado para impressão
+function mostrarRelatorioParaImpressao(relatorio) {
+    const meses = [
+        'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+        'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
+    ];
+    
+    // Formatar conteúdo para impressão
+    const conteudoImpressao = `
+        <div class="impressao-relatorio" style="font-family: Arial, sans-serif;">
+            <style>
+                @media print {
+                    body * { visibility: hidden; }
+                    .impressao-relatorio, .impressao-relatorio * { visibility: visible; }
+                    .impressao-relatorio { position: absolute; left: 0; top: 0; width: 100%; }
+                    .no-print { display: none !important; }
+                }
+                .impressao-relatorio {
+                    max-width: 800px;
+                    margin: 0 auto;
+                    padding: 20px;
+                    background: white;
+                }
+                .cabecalho-impressao {
+                    text-align: center;
+                    border-bottom: 3px solid #2d5a27;
+                    padding-bottom: 20px;
+                    margin-bottom: 30px;
+                }
+                .secao {
+                    margin-bottom: 30px;
+                    page-break-inside: avoid;
+                }
+                table {
+                    width: 100%;
+                    border-collapse: collapse;
+                    margin: 10px 0;
+                }
+                th, td {
+                    border: 1px solid #ddd;
+                    padding: 8px;
+                    text-align: left;
+                }
+                th {
+                    background-color: #f8f9fa;
+                }
+                .total {
+                    font-weight: bold;
+                    background-color: #f8f9fa;
+                }
+            </style>
+            
+            <div class="cabecalho-impressao">
+                <h1 style="color: #2d5a27; margin-bottom: 5px;">${relatorio.cabecalho.titulo}</h1>
+                <h3 style="color: #666; margin-bottom: 10px;">${relatorio.cabecalho.instituicao}</h3>
+                <p><strong>Período:</strong> ${relatorio.cabecalho.periodo}</p>
+                <p><strong>Data de Geração:</strong> ${relatorio.cabecalho.data_geracao}</p>
+            </div>
+            
+            <div class="secao">
+                <h2 style="color: #2d5a27; border-bottom: 2px solid #2d5a27; padding-bottom: 5px;">📈 RESUMO DO MÊS</h2>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px; margin: 15px 0;">
+                    <div style="text-align: center; padding: 15px; border: 1px solid #ddd; border-radius: 5px;">
+                        <div style="font-size: 24px; font-weight: bold; color: #2d5a27;">${relatorio.resumo.total_movimentos}</div>
+                        <div>Total de Movimentos</div>
+                    </div>
+                    <div style="text-align: center; padding: 15px; border: 1px solid #ddd; border-radius: 5px;">
+                        <div style="font-size: 24px; font-weight: bold; color: #28a745;">${relatorio.resumo.total_entradas}</div>
+                        <div>Entradas</div>
+                    </div>
+                    <div style="text-align: center; padding: 15px; border: 1px solid #ddd; border-radius: 5px;">
+                        <div style="font-size: 24px; font-weight: bold; color: #dc3545;">${relatorio.resumo.total_saidas}</div>
+                        <div>Saídas</div>
+                    </div>
+                    <div style="text-align: center; padding: 15px; border: 1px solid #ddd; border-radius: 5px;">
+                        <div style="font-size: 24px; font-weight: bold; color: #2d5a27;">${relatorio.resumo.beneficiarios_atendidos}</div>
+                        <div>Beneficiários Atendidos</div>
+                    </div>
+                </div>
+                
+                <div style="margin-top: 20px;">
+                    <p><strong>Quantidade Total Entrada:</strong> ${relatorio.resumo.quantidade_total_entradas}</p>
+                    <p><strong>Quantidade Total Saída:</strong> ${relatorio.resumo.quantidade_total_saidas}</p>
+                    <p><strong>Saldo do Mês:</strong> <span style="font-weight: bold; ${relatorio.resumo.saldo_mensal >= 0 ? 'color: #28a745;' : 'color: #dc3545;'}">${relatorio.resumo.saldo_mensal}</span></p>
+                </div>
+            </div>
+            
+            <div class="secao">
+                <h2 style="color: #2d5a27; border-bottom: 2px solid #2d5a27; padding-bottom: 5px;">📥 ENTRADAS DO MÊS</h2>
+                ${relatorio.entradas.lista.length > 0 ? `
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Data</th>
+                                <th>Item</th>
+                                <th>Quantidade</th>
+                                <th>Origem</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${relatorio.entradas.lista.map(entrada => `
+                                <tr>
+                                    <td>${entrada.data}</td>
+                                    <td>${entrada.item}</td>
+                                    <td>${entrada.quantidade} ${entrada.unidade}</td>
+                                    <td>${entrada.origem}</td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                ` : '<p style="text-align: center; color: #666; font-style: italic;">Nenhuma entrada registada neste mês.</p>'}
+            </div>
+            
+            <div class="secao">
+                <h2 style="color: #2d5a27; border-bottom: 2px solid #2d5a27; padding-bottom: 5px;">📤 SAÍDAS DO MÊS</h2>
+                ${relatorio.saidas.lista.length > 0 ? `
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Data</th>
+                                <th>Item</th>
+                                <th>Quantidade</th>
+                                <th>Beneficiário</th>
+                                <th>Observações</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${relatorio.saidas.lista.map(saida => `
+                                <tr>
+                                    <td>${saida.data}</td>
+                                    <td>${saida.item}</td>
+                                    <td>${saida.quantidade} ${saida.unidade}</td>
+                                    <td>${saida.beneficiario}</td>
+                                    <td>${saida.observacoes || '-'}</td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                ` : '<p style="text-align: center; color: #666; font-style: italic;">Nenhuma saída registada neste mês.</p>'}
+            </div>
+            
+            <div class="secao no-print" style="text-align: center; margin-top: 40px; padding-top: 20px; border-top: 2px dashed #ddd;">
+                <button class="btn" onclick="window.print()" style="padding: 10px 20px; font-size: 16px;">
+                    🖨️ Imprimir Este Relatório
+                </button>
+                <button class="btn btn-secondary" onclick="closeModal()" style="padding: 10px 20px; font-size: 16px; margin-left: 10px;">
+                    ❌ Fechar
+                </button>
+            </div>
+        </div>
+    `;
+    
+    document.getElementById('modalContent').innerHTML = conteudoImpressao;
+    document.getElementById('genericModal').style.display = 'block';
+}
+
+// Função para gerar novamente um relatório
+async function gerarNovamenteRelatorio(ano, mes) {
+    if (confirm(`Deseja regenerar o relatório de ${mes}/${ano}?`)) {
+        try {
+            const response = await fetch('/api/relatorios/mensal/gerar', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    ano: ano,
+                    mes: mes,
+                    salvar: true
+                })
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                showAlert('Relatório regenerado com sucesso!', 'success');
+                // Recarregar a lista
+                carregarRelatoriosSalvos();
+            } else {
+                showAlert('Erro ao regenerar relatório: ' + data.error, 'danger');
+            }
+        } catch (error) {
+            console.error('Erro ao regenerar relatório:', error);
+            showAlert('Erro de conexão', 'danger');
+        }
+    }
+}
+
+function adicionarBotaoRelatorios() {
+    console.log('🔍 Procurando local para adicionar botão de relatórios...');
+    
+    // TENTATIVA 1: Procurar a seção de ações no stock
+    const stockSection = document.getElementById('stockSection');
+    if (stockSection) {
+        // Encontrar ou criar a div de botões
+        let actionButtons = stockSection.querySelector('.action-buttons');
+        
+        if (!actionButtons) {
+            // Criar div de botões se não existir
+            actionButtons = document.createElement('div');
+            actionButtons.className = 'action-buttons';
+            actionButtons.style.cssText = 'display: flex; gap: 15px; margin-bottom: 30px; flex-wrap: wrap;';
+            
+            // Inserir no início da seção
+            stockSection.insertBefore(actionButtons, stockSection.firstChild);
+        }
+        
+        // Verificar se o botão já existe
+        if (!document.getElementById('botaoRelatorios')) {
+            const botaoRelatorios = document.createElement('button');
+            botaoRelatorios.id = 'botaoRelatorios';
+            botaoRelatorios.className = 'btn';
+            botaoRelatorios.innerHTML = '📊 Relatórios Mensais';
+            botaoRelatorios.onclick = showRelatoriosInterface;
+            actionButtons.appendChild(botaoRelatorios);
+            
+            console.log('✅ Botão de relatórios adicionado na seção Stock');
+            return true;
+        }
+    }
+    
+    // TENTATIVA 2: Procurar em outras seções
+    const sections = ['beneficiariosSection', 'relatoriosSection'];
+    for (const sectionId of sections) {
+        const section = document.getElementById(sectionId);
+        if (section) {
+            let actionButtons = section.querySelector('.action-buttons');
+            if (!actionButtons) {
+                actionButtons = document.createElement('div');
+                actionButtons.className = 'action-buttons';
+                actionButtons.style.cssText = 'display: flex; gap: 15px; margin-bottom: 30px; flex-wrap: wrap;';
+                section.insertBefore(actionButtons, section.firstChild);
+            }
+            
+            if (!document.getElementById('botaoRelatorios')) {
+                const botaoRelatorios = document.createElement('button');
+                botaoRelatorios.id = 'botaoRelatorios';
+                botaoRelatorios.className = 'btn';
+                botaoRelatorios.innerHTML = '📊 Relatórios Mensais';
+                botaoRelatorios.onclick = showRelatoriosInterface;
+                actionButtons.appendChild(botaoRelatorios);
+                
+                console.log(`✅ Botão de relatórios adicionado na seção ${sectionId}`);
+                return true;
+            }
+        }
+    }
+    
+    // TENTATIVA 3: Adicionar na barra de navegação principal
+    const navBar = document.querySelector('.navbar-nav, nav, .navigation');
+    if (navBar && !document.getElementById('botaoRelatorios')) {
+        const botaoRelatorios = document.createElement('li');
+        botaoRelatorios.id = 'botaoRelatorios';
+        botaoRelatorios.innerHTML = `
+            <a href="#" onclick="showRelatoriosInterface(); return false;" class="nav-link">
+                📊 Relatórios
+            </a>
+        `;
+        navBar.appendChild(botaoRelatorios);
+        
+        console.log('✅ Botão de relatórios adicionado na barra de navegação');
+        return true;
+    }
+    
+    console.log('⚠️ Não foi possível encontrar local para adicionar botão de relatórios');
+    return false;
+}
+
+// Inicializar quando a página carregar
+document.addEventListener('DOMContentLoaded', function() {
+    setTimeout(adicionarBotaoRelatorios, 1000);
+});

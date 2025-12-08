@@ -1,3 +1,5 @@
 # Ignorar pastas de ambiente virtual
 venv/
 .venv/
+node_modules/
+database/

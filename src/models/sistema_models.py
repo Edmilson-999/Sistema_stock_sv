@@ -70,11 +70,9 @@ class Beneficiario(db.Model):
     observacoes = db.Column(db.Text)
     zona_residencia = db.Column(db.String(50))
     perdas_pedidos = db.Column(db.Text)
-    # NOVO: instituição que registrou o beneficiário
     instituicao_registro_id = db.Column(db.Integer, db.ForeignKey('instituicoes.id'))
     data_registro = db.Column(db.DateTime, default=datetime.utcnow)
     
-    # Relacionamentos CORRIGIDOS
     instituicao_registro = db.relationship('Instituicao', backref='beneficiarios_registrados')
     
     def to_dict(self):
@@ -165,7 +163,7 @@ class MovimentoStock(db.Model):
     
     id = db.Column(db.Integer, primary_key=True)
     item_id = db.Column(db.Integer, db.ForeignKey('itens_stock.id'), nullable=False)
-    instituicao_id = db.Column(db.Integer, db.ForeignKey('instituicoes.id'), nullable=False)
+    instituicao_id = db.Column(db.Integer, db.ForeignKey('instituicoes.id'), nullable=True)
     beneficiario_nif = db.Column(db.String(20), db.ForeignKey('beneficiarios.nif'))
     tipo_movimento = db.Column(db.Enum('entrada', 'saida'), nullable=False)
     quantidade = db.Column(db.Float, nullable=False)
@@ -177,8 +175,8 @@ class MovimentoStock(db.Model):
     
     # Relacionamentos CORRIGIDOS (nomes únicos)
     item = db.relationship('ItemStock', backref='movimentos_stock')
-    instituicao_movimento = db.relationship('Instituicao', backref='movimentos_stock')  # Nome alterado
-    beneficiario = db.relationship('Beneficiario', backref='movimentos_stock')  # Nome alterado
+    instituicao_movimento = db.relationship('Instituicao', backref='movimentos_stock')  
+    beneficiario = db.relationship('Beneficiario', backref='movimentos_stock') 
     
     def to_dict(self):
         return {
@@ -198,6 +196,54 @@ class MovimentoStock(db.Model):
             'origem_doacao': self.origem_doacao,
             'local_entrega': self.local_entrega
         }
+
+class RelatorioMensal(db.Model):
+    __tablename__ = 'relatorios_mensais'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    instituicao_id = db.Column(db.Integer, db.ForeignKey('instituicoes.id'), nullable=False)
+    ano = db.Column(db.Integer, nullable=False)
+    mes = db.Column(db.Integer, nullable=False)  # 1-12
+    data_geracao = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    # Dados do relatório (armazenados como JSON)
+    dados_json = db.Column(db.Text, nullable=False)
+    
+    # Metadados
+    total_entradas = db.Column(db.Integer, default=0)
+    total_saidas = db.Column(db.Integer, default=0)
+    saldo_mensal = db.Column(db.Integer, default=0)
+    movimentos_count = db.Column(db.Integer, default=0)
+    
+    # Relacionamentos
+    instituicao = db.relationship('Instituicao', backref='relatorios')
+    
+    # Índice composto único
+    __table_args__ = (
+        db.UniqueConstraint('instituicao_id', 'ano', 'mes', name='unique_relatorio_mensal'),
+    )
+    
+    def to_dict(self):
+        import json
+        return {
+            'id': self.id,
+            'ano': self.ano,
+            'mes': self.mes,
+            'mes_nome': self.get_mes_nome(),
+            'data_geracao': self.data_geracao.isoformat() if self.data_geracao else None,
+            'total_entradas': self.total_entradas,
+            'total_saidas': self.total_saidas,
+            'saldo_mensal': self.saldo_mensal,
+            'movimentos_count': self.movimentos_count,
+            'dados': json.loads(self.dados_json) if self.dados_json else {}
+        }
+    
+    def get_mes_nome(self):
+        meses = [
+            'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+            'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
+        ]
+        return meses[self.mes - 1] if 1 <= self.mes <= 12 else f'Mês {self.mes}'    
 
 def init_dados_exemplo():
     """Inicializa dados de exemplo para a base de dados"""
