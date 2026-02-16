@@ -100,10 +100,6 @@ python src/main.py
 
 ### Instituições Disponíveis:
 - **Cáritas São Vicente:** `caritas` / `sv2024`
-- **Cruz Vermelha:** `cruz_vermelha` / `sv2024`
-- **ADRA:** `adra` / `sv2024`
-- **Bombeiros:** `bombeiros` / `sv2024`
-- **Câmara Municipal:** `camara` / `sv2024`
 
 ## 📱 Interface do Utilizador
 
@@ -222,19 +218,3 @@ Este sistema foi criado com o objetivo de facilitar a coordenação entre as dif
 ---
 
 *Sistema desenvolvido com 💚 para apoio às vítimas do enchente de São Vicente*
-
-# To Do 
-
-Implementar um feature q quando um botão é clicado uma vez ele realiza uma açao ou mostra algo e quando clicado de novo elefecha a janela aberta. Por ex: quando clico em gerenciar stock ele abre o gerenciamento de stock e quando quero fechalo é só clicado de novo
-
-Em vez de selecionar o beneficiario devemos apenas colocar o nome da pessoa ali.
-
-No gestão de stock -> resumo de stock -> total d movimentos, especificar que tipos de movimentos, ex: 2 de saida e 2 de entrada. Mas manter o card e embaixo do numero mostrar as especificaçaoes
-Fzr msm coisa para entradas e saídas 
-Em entrada em vez da quantidade de entrada, deve mostrar total de netradas exemplo emtrou 1 entrada e deve mostrar 1
-
-Corrigr um erro qdo efectuar mais uma doação a familia com o mesmo produto ocorre um erro de ligaçaão em vez da msg de alerta.
-
-
-Identificar de quem é o beneficiario
-Consegui visualizar apenas o seus beneficiarios, agora em caso de necessidade pode ter acesso atraves do NIF da pessoa do seu historico 
