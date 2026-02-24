@@ -2029,3 +2029,429 @@ function adicionarBotaoRelatorios() {
 document.addEventListener('DOMContentLoaded', function() {
     setTimeout(adicionarBotaoRelatorios, 1000);
 });
+
+// ==================== GESTÃO DE PALAVRAS-PASSE ====================
+
+/**
+ * Mostra modal para alterar a própria password
+ */
+function showChangePasswordModal() {
+    const modalContent = `
+        <h2 style="margin-bottom: 25px; color: #2d5a27;">🔐 Alterar Minha Password</h2>
+        
+        <form id="changePasswordForm" onsubmit="event.preventDefault(); changePassword();">
+            <div class="form-group">
+                <label>Password Atual *</label>
+                <input type="password" id="currentPassword" required 
+                       style="width: 100%; padding: 12px; border: 2px solid #ddd; border-radius: 8px;">
+            </div>
+            
+            <div class="form-group">
+                <label>Nova Password *</label>
+                <input type="password" id="newPassword" required 
+                       onkeyup="validatePasswordStrength(this.value)"
+                       style="width: 100%; padding: 12px; border: 2px solid #ddd; border-radius: 8px;">
+                <div id="passwordStrength" style="margin-top: 10px;">
+                    <div style="display: flex; gap: 5px; margin-bottom: 5px;">
+                        <div class="strength-bar" id="strengthBar1" style="height: 4px; width: 20%; background: #ddd; border-radius: 2px;"></div>
+                        <div class="strength-bar" id="strengthBar2" style="height: 4px; width: 20%; background: #ddd; border-radius: 2px;"></div>
+                        <div class="strength-bar" id="strengthBar3" style="height: 4px; width: 20%; background: #ddd; border-radius: 2px;"></div>
+                        <div class="strength-bar" id="strengthBar4" style="height: 4px; width: 20%; background: #ddd; border-radius: 2px;"></div>
+                        <div class="strength-bar" id="strengthBar5" style="height: 4px; width: 20%; background: #ddd; border-radius: 2px;"></div>
+                    </div>
+                    <div id="strengthText" style="font-size: 14px; color: #666;"></div>
+                    <div id="passwordFeedback" style="font-size: 13px; color: #856404; margin-top: 5px;"></div>
+                </div>
+            </div>
+            
+            <div class="form-group">
+                <label>Confirmar Nova Password *</label>
+                <input type="password" id="confirmPassword" required 
+                       onkeyup="checkPasswordMatch()"
+                       style="width: 100%; padding: 12px; border: 2px solid #ddd; border-radius: 8px;">
+                <div id="passwordMatchMessage" style="font-size: 13px; margin-top: 5px;"></div>
+            </div>
+            
+            <div class="password-requirements" style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin: 20px 0;">
+                <h4 style="margin-bottom: 10px; color: #2d5a27;">📋 Requisitos da Password:</h4>
+                <ul style="list-style: none; padding: 0;">
+                    <li id="reqLength" style="margin-bottom: 5px;">❌ Mínimo 8 caracteres</li>
+                    <li id="reqUpper" style="margin-bottom: 5px;">❌ Pelo menos uma letra maiúscula</li>
+                    <li id="reqLower" style="margin-bottom: 5px;">❌ Pelo menos uma letra minúscula</li>
+                    <li id="reqNumber" style="margin-bottom: 5px;">❌ Pelo menos um número</li>
+                    <li id="reqSpecial" style="margin-bottom: 5px;">❌ Pelo menos um caractere especial (!@#$%...)</li>
+                </ul>
+            </div>
+            
+            <div id="passwordError" style="display: none; color: #721c24; background: #f8d7da; padding: 10px; border-radius: 5px; margin-bottom: 15px;"></div>
+            
+            <div style="display: flex; gap: 15px; margin-top: 25px;">
+                <button type="submit" class="btn" style="flex: 1; padding: 15px;">
+                    🔐 Alterar Password
+                </button>
+                <button type="button" class="btn btn-secondary" onclick="closeModal()" style="flex: 1; padding: 15px;">
+                    ❌ Cancelar
+                </button>
+            </div>
+        </form>
+    `;
+    
+    document.getElementById('modalContent').innerHTML = modalContent;
+    document.getElementById('genericModal').style.display = 'block';
+}
+
+/**
+ * Valida a força da password em tempo real
+ */
+async function validatePasswordStrength(password) {
+    if (!password) {
+        resetPasswordStrength();
+        return;
+    }
+    
+    try {
+        const response = await fetch('/api/auth/validate-password', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ password })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            // Atualizar barras de força
+            const bars = ['strengthBar1', 'strengthBar2', 'strengthBar3', 'strengthBar4', 'strengthBar5'];
+            
+            // Resetar todas as barras
+            bars.forEach(barId => {
+                document.getElementById(barId).style.background = '#ddd';
+            });
+            
+            // Colorir baseado na força
+            const colors = ['#dc3545', '#ffc107', '#28a745', '#28a745', '#28a745'];
+            for (let i = 0; i < data.strength; i++) {
+                document.getElementById(bars[i]).style.background = colors[i];
+            }
+            
+            // Atualizar texto
+            const strengthText = document.getElementById('strengthText');
+            strengthText.textContent = `Força: ${data.level}`;
+            strengthText.style.color = data.strength <= 2 ? '#dc3545' : data.strength <= 3 ? '#ffc107' : '#28a745';
+            
+            // Atualizar feedback
+            const feedbackDiv = document.getElementById('passwordFeedback');
+            if (data.feedback && data.feedback.length > 0) {
+                feedbackDiv.innerHTML = '⚠️ ' + data.feedback.join(', ');
+                feedbackDiv.style.display = 'block';
+            } else {
+                feedbackDiv.style.display = 'none';
+            }
+            
+            // Atualizar requisitos visuais
+            updatePasswordRequirements(password);
+        }
+    } catch (error) {
+        console.error('Erro ao validar password:', error);
+    }
+}
+
+/**
+ * Atualiza os requisitos visuais da password
+ */
+function updatePasswordRequirements(password) {
+    const reqLength = document.getElementById('reqLength');
+    const reqUpper = document.getElementById('reqUpper');
+    const reqLower = document.getElementById('reqLower');
+    const reqNumber = document.getElementById('reqNumber');
+    const reqSpecial = document.getElementById('reqSpecial');
+    
+    if (reqLength) {
+        reqLength.innerHTML = password.length >= 8 ? '✅ Mínimo 8 caracteres' : '❌ Mínimo 8 caracteres';
+        reqLength.style.color = password.length >= 8 ? '#28a745' : '#dc3545';
+    }
+    
+    if (reqUpper) {
+        const hasUpper = /[A-Z]/.test(password);
+        reqUpper.innerHTML = hasUpper ? '✅ Pelo menos uma maiúscula' : '❌ Pelo menos uma maiúscula';
+        reqUpper.style.color = hasUpper ? '#28a745' : '#dc3545';
+    }
+    
+    if (reqLower) {
+        const hasLower = /[a-z]/.test(password);
+        reqLower.innerHTML = hasLower ? '✅ Pelo menos uma minúscula' : '❌ Pelo menos uma minúscula';
+        reqLower.style.color = hasLower ? '#28a745' : '#dc3545';
+    }
+    
+    if (reqNumber) {
+        const hasNumber = /[0-9]/.test(password);
+        reqNumber.innerHTML = hasNumber ? '✅ Pelo menos um número' : '❌ Pelo menos um número';
+        reqNumber.style.color = hasNumber ? '#28a745' : '#dc3545';
+    }
+    
+    if (reqSpecial) {
+        const hasSpecial = /[!@#$%^&*()_+\-=\[\]{}|;:,.<>?]/.test(password);
+        reqSpecial.innerHTML = hasSpecial ? '✅ Pelo menos um caractere especial' : '❌ Pelo menos um caractere especial';
+        reqSpecial.style.color = hasSpecial ? '#28a745' : '#dc3545';
+    }
+}
+
+/**
+ * Reseta as barras de força da password
+ */
+function resetPasswordStrength() {
+    const bars = ['strengthBar1', 'strengthBar2', 'strengthBar3', 'strengthBar4', 'strengthBar5'];
+    bars.forEach(barId => {
+        const bar = document.getElementById(barId);
+        if (bar) bar.style.background = '#ddd';
+    });
+    
+    const strengthText = document.getElementById('strengthText');
+    if (strengthText) strengthText.textContent = '';
+    
+    const feedbackDiv = document.getElementById('passwordFeedback');
+    if (feedbackDiv) feedbackDiv.style.display = 'none';
+}
+
+/**
+ * Verifica se as passwords coincidem
+ */
+function checkPasswordMatch() {
+    const newPassword = document.getElementById('newPassword')?.value || '';
+    const confirmPassword = document.getElementById('confirmPassword')?.value || '';
+    const matchMessage = document.getElementById('passwordMatchMessage');
+    
+    if (confirmPassword) {
+        if (newPassword === confirmPassword) {
+            matchMessage.innerHTML = '✅ Passwords coincidem';
+            matchMessage.style.color = '#28a745';
+        } else {
+            matchMessage.innerHTML = '❌ Passwords não coincidem';
+            matchMessage.style.color = '#dc3545';
+        }
+    } else {
+        matchMessage.innerHTML = '';
+    }
+}
+
+/**
+ * Altera a password do usuário
+ */
+async function changePassword() {
+    const currentPassword = document.getElementById('currentPassword').value;
+    const newPassword = document.getElementById('newPassword').value;
+    const confirmPassword = document.getElementById('confirmPassword').value;
+    
+    // Validar campos
+    if (!currentPassword || !newPassword || !confirmPassword) {
+        showPasswordError('Todos os campos são obrigatórios');
+        return;
+    }
+    
+    // Validar se as passwords coincidem
+    if (newPassword !== confirmPassword) {
+        showPasswordError('As passwords não coincidem');
+        return;
+    }
+    
+    // Validar requisitos da password
+    if (newPassword.length < 8) {
+        showPasswordError('A password deve ter pelo menos 8 caracteres');
+        return;
+    }
+    
+    if (!/[A-Z]/.test(newPassword)) {
+        showPasswordError('A password deve conter pelo menos uma letra maiúscula');
+        return;
+    }
+    
+    if (!/[a-z]/.test(newPassword)) {
+        showPasswordError('A password deve conter pelo menos uma letra minúscula');
+        return;
+    }
+    
+    if (!/[0-9]/.test(newPassword)) {
+        showPasswordError('A password deve conter pelo menos um número');
+        return;
+    }
+    
+    try {
+        const response = await fetch('/api/auth/change-password', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                current_password: currentPassword,
+                new_password: newPassword
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            showAlert('✅ Password alterada com sucesso!', 'success');
+            closeModal();
+            
+            // Se for a primeira password, atualizar estado
+            if (currentUser && currentUser.primeira_password) {
+                currentUser.primeira_password = false;
+            }
+        } else {
+            showPasswordError(data.error || 'Erro ao alterar password');
+        }
+    } catch (error) {
+        console.error('Erro ao alterar password:', error);
+        showPasswordError('Erro de conexão');
+    }
+}
+
+/**
+ * Mostra erro no formulário de password
+ */
+function showPasswordError(message) {
+    const errorDiv = document.getElementById('passwordError');
+    if (errorDiv) {
+        errorDiv.textContent = message;
+        errorDiv.style.display = 'block';
+        
+        // Esconder após 5 segundos
+        setTimeout(() => {
+            errorDiv.style.display = 'none';
+        }, 5000);
+    } else {
+        alert(message);
+    }
+}
+
+// ==================== ADMIN: GESTÃO DE PASSWORDS ====================
+
+/**
+ * Mostra modal para administrador alterar password de outra instituição
+ */
+function showAdminChangePasswordModal(instituicaoId, instituicaoNome) {
+    const modalContent = `
+        <h2 style="margin-bottom: 25px; color: #2d5a27;">🔐 Alterar Password - ${instituicaoNome}</h2>
+        
+        <form id="adminChangePasswordForm" onsubmit="event.preventDefault(); adminChangePassword(${instituicaoId});">
+            <div class="form-group">
+                <label>Nova Password *</label>
+                <input type="password" id="adminNewPassword" required 
+                       style="width: 100%; padding: 12px; border: 2px solid #ddd; border-radius: 8px;">
+            </div>
+            
+            <div class="form-group">
+                <label>Confirmar Nova Password *</label>
+                <input type="password" id="adminConfirmPassword" required 
+                       style="width: 100%; padding: 12px; border: 2px solid #ddd; border-radius: 8px;">
+            </div>
+            
+            <div class="alert alert-warning" style="margin: 20px 0;">
+                <strong>⚠️ Atenção:</strong> A instituição precisará usar esta nova password no próximo login.
+            </div>
+            
+            <div id="adminPasswordError" style="display: none; color: #721c24; background: #f8d7da; padding: 10px; border-radius: 5px; margin-bottom: 15px;"></div>
+            
+            <div style="display: flex; gap: 15px; margin-top: 25px;">
+                <button type="submit" class="btn" style="flex: 1; padding: 15px;">
+                    🔐 Definir Nova Password
+                </button>
+                <button type="button" class="btn btn-secondary" onclick="closeModal()" style="flex: 1; padding: 15px;">
+                    ❌ Cancelar
+                </button>
+            </div>
+        </form>
+    `;
+    
+    document.getElementById('modalContent').innerHTML = modalContent;
+    document.getElementById('genericModal').style.display = 'block';
+}
+
+/**
+ * Administrador altera password de outra instituição
+ */
+async function adminChangePassword(instituicaoId) {
+    const newPassword = document.getElementById('adminNewPassword').value;
+    const confirmPassword = document.getElementById('adminConfirmPassword').value;
+    
+    if (!newPassword || !confirmPassword) {
+        showAdminPasswordError('Todos os campos são obrigatórios');
+        return;
+    }
+    
+    if (newPassword !== confirmPassword) {
+        showAdminPasswordError('As passwords não coincidem');
+        return;
+    }
+    
+    if (newPassword.length < 6) {
+        showAdminPasswordError('A password deve ter pelo menos 6 caracteres');
+        return;
+    }
+    
+    try {
+        const response = await fetch('/api/auth/admin/change-password', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                instituicao_id: instituicaoId,
+                new_password: newPassword
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            showAlert(data.message || 'Password alterada com sucesso!', 'success');
+            closeModal();
+        } else {
+            showAdminPasswordError(data.error || 'Erro ao alterar password');
+        }
+    } catch (error) {
+        console.error('Erro ao alterar password:', error);
+        showAdminPasswordError('Erro de conexão');
+    }
+}
+
+/**
+ * Mostra erro no formulário admin de password
+ */
+function showAdminPasswordError(message) {
+    const errorDiv = document.getElementById('adminPasswordError');
+    if (errorDiv) {
+        errorDiv.textContent = message;
+        errorDiv.style.display = 'block';
+        
+        setTimeout(() => {
+            errorDiv.style.display = 'none';
+        }, 5000);
+    } else {
+        alert(message);
+    }
+}
+
+// Adicionar CSS para o medidor de força da password
+const passwordStrengthCSS = `
+<style>
+.strength-bar {
+    transition: background 0.3s ease;
+}
+
+.password-requirements ul {
+    list-style: none;
+    padding: 0;
+}
+
+.password-requirements li {
+    margin-bottom: 5px;
+    transition: color 0.3s ease;
+}
+
+#passwordStrength {
+    margin-top: 10px;
+    padding: 10px;
+    background: #f8f9fa;
+    border-radius: 5px;
+}
+</style>
+`;
+
+// Adicionar CSS ao documento
+document.head.insertAdjacentHTML('beforeend', passwordStrengthCSS);

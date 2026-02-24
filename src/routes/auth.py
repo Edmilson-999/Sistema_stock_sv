@@ -1,6 +1,5 @@
 from flask import Blueprint, request, jsonify, session
 from src.models.sistema_models import db, Instituicao, MovimentoStock, Beneficiario
-from src.models.sistema_models import db, Instituicao
 from src.services.registro_service import RegistroService
 from functools import wraps
 
@@ -50,13 +49,14 @@ def create_admin_user():
                 aprovada=True,
                 ativa=True
             )
-            # Usar a senha padrão do sistema
-            admin.set_password('sv2024')
+            admin.set_password('Admin@2024')
             db.session.add(admin)
             db.session.commit()
             print("✅ Usuário admin criado com sucesso")
     except Exception as e:
         print(f"❌ Erro ao criar usuário admin: {e}")
+
+# ==================== ROTAS PÚBLICAS ====================
 
 @auth_bp.route('/login', methods=['POST'])
 def login():
@@ -70,13 +70,11 @@ def login():
         username = data['username']
         password = data['password']
         
-        # Procurar a instituição pelo username
         instituicao = Instituicao.query.filter_by(username=username).first()
         
         if not instituicao:
             return jsonify({'error': 'Credenciais inválidas'}), 401
         
-        # Verificar se a instituição pode fazer login
         if not instituicao.pode_fazer_login():
             if not instituicao.aprovada:
                 return jsonify({
@@ -86,23 +84,13 @@ def login():
             else:
                 return jsonify({'error': 'Instituição desativada'}), 401
         
-        # Verificação de password (mantendo compatibilidade com sv2024)
-        is_admin_user = username in ['admin', 'caritas']
+        if not instituicao.check_password(password):
+            return jsonify({'error': 'Credenciais inválidas'}), 401
         
-        # Para admin, sempre verificar a senha corretamente
-        if is_admin_user:
-            if not instituicao.check_password(password) and password != 'sv2024':
-                return jsonify({'error': 'Credenciais inválidas'}), 401
-        else:
-            # Para usuários normais, manter compatibilidade
-            if password != 'sv2024' and not instituicao.check_password(password):
-                return jsonify({'error': 'Credenciais inválidas'}), 401
-        
-        # Criar sessão
         session['instituicao_id'] = instituicao.id
         session['instituicao_nome'] = instituicao.nome
         session['instituicao_username'] = instituicao.username
-        session['is_admin'] = is_admin_user
+        session['is_admin'] = instituicao.username in ['admin', 'caritas']
         
         return jsonify({
             'success': True,
@@ -113,15 +101,98 @@ def login():
                 'username': instituicao.username,
                 'email': instituicao.email,
                 'aprovada': instituicao.aprovada,
-                'admin': is_admin_user
+                'admin': instituicao.username in ['admin', 'caritas']
             }
         }), 200
         
     except Exception as e:
         return jsonify({'error': f'Erro interno: {str(e)}'}), 500
 
+@auth_bp.route('/registro', methods=['POST'])
+def registro():
+    """Endpoint para registro de novas instituições"""
+    try:
+        data = request.get_json()
+        
+        if not data:
+            return jsonify({'error': 'Dados não fornecidos'}), 400
+        
+        resultado = RegistroService.registrar_instituicao(data)
+        
+        if resultado['sucesso']:
+            return jsonify({
+                'success': True,
+                'message': 'Instituição registada com sucesso! Aguarde aprovação para fazer login.',
+                'instituicao': resultado['instituicao'].to_dict()
+            }), 201
+        else:
+            return jsonify({'error': resultado['erro']}), 400
+            
+    except Exception as e:
+        return jsonify({'error': f'Erro interno: {str(e)}'}), 500
+
+@auth_bp.route('/tipos-instituicao', methods=['GET'])
+def get_tipos_instituicao():
+    """Endpoint para obter tipos de instituição disponíveis"""
+    return jsonify({
+        'tipos': [
+            {'valor': 'ong', 'nome': 'ONG - Organização Não Governamental'},
+            {'valor': 'governo', 'nome': 'Órgão Governamental'},
+            {'valor': 'religiosa', 'nome': 'Instituição Religiosa'},
+            {'valor': 'empresa', 'nome': 'Empresa Privada'},
+            {'valor': 'cooperativa', 'nome': 'Cooperativa'},
+            {'valor': 'associacao', 'nome': 'Associação'},
+            {'valor': 'fundacao', 'nome': 'Fundação'},
+            {'valor': 'outro', 'nome': 'Outro'}
+        ]
+    }), 200
+
+@auth_bp.route('/instituicoes', methods=['GET'])
+def get_instituicoes():
+    """Endpoint para obter a lista de instituições disponíveis (apenas nomes para o login)"""
+    try:
+        instituicoes = Instituicao.query.filter_by(aprovada=True, ativa=True).all()
+        
+        instituicoes_list = []
+        for inst in instituicoes:
+            if inst.username not in ['admin', 'caritas']:
+                instituicoes_list.append({
+                    'username': inst.username,
+                    'nome': inst.nome
+                })
+        
+        return jsonify({
+            'success': True,
+            'instituicoes': instituicoes_list
+        }), 200
+        
+    except Exception as e:
+        return jsonify({'error': f'Erro interno: {str(e)}'}), 500
+
+@auth_bp.route('/check', methods=['GET'])
+def check_auth():
+    """Endpoint para verificar se o utilizador está autenticado"""
+    try:
+        if 'instituicao_id' in session:
+            instituicao = get_current_instituicao()
+            if instituicao and instituicao.ativa:
+                is_admin = instituicao.username in ['admin', 'caritas']
+                return jsonify({
+                    'authenticated': True,
+                    'instituicao': {
+                        'id': instituicao.id,
+                        'nome': instituicao.nome,
+                        'username': instituicao.username,
+                        'admin': is_admin
+                    }
+                }), 200
+        
+        return jsonify({'authenticated': False}), 200
+        
+    except Exception as e:
+        return jsonify({'error': f'Erro interno: {str(e)}'}), 500
+
 @auth_bp.route('/logout', methods=['POST'])
-@login_required
 def logout():
     """Endpoint para terminar a sessão"""
     try:
@@ -152,57 +223,12 @@ def get_current_user():
     except Exception as e:
         return jsonify({'error': f'Erro interno: {str(e)}'}), 500
 
-@auth_bp.route('/check', methods=['GET'])
-def check_auth():
-    """Endpoint para verificar se o utilizador está autenticado"""
-    try:
-        if 'instituicao_id' in session:
-            instituicao = get_current_instituicao()
-            if instituicao and instituicao.ativa:
-                is_admin = instituicao.username in ['admin', 'caritas']
-                return jsonify({
-                    'authenticated': True,
-                    'instituicao': {
-                        'id': instituicao.id,
-                        'nome': instituicao.nome,
-                        'username': instituicao.username,
-                        'admin': is_admin
-                    }
-                }), 200
-        
-        return jsonify({'authenticated': False}), 200
-        
-    except Exception as e:
-        return jsonify({'error': f'Erro interno: {str(e)}'}), 500
-
-@auth_bp.route('/instituicoes', methods=['GET'])
-def get_instituicoes():
-    """Endpoint para obter a lista de instituições disponíveis (apenas nomes para o login)"""
-    try:
-        # Buscar apenas instituições aprovadas e ativas
-        instituicoes = Instituicao.query.filter_by(aprovada=True, ativa=True).all()
-        
-        instituicoes_list = []
-        for inst in instituicoes:
-            # Não incluir usuários admin na lista de login normal
-            if inst.username not in ['admin', 'caritas']:
-                instituicoes_list.append({
-                    'username': inst.username,
-                    'nome': inst.nome
-                })
-        
-        return jsonify({
-            'success': True,
-            'instituicoes': instituicoes_list
-        }), 200
-        
-    except Exception as e:
-        return jsonify({'error': f'Erro interno: {str(e)}'}), 500
+# ==================== ROTAS DE GESTÃO DE PASSWORDS ====================
 
 @auth_bp.route('/change-password', methods=['POST'])
 @login_required
-def change_password():
-    """Endpoint para alterar a password da instituição"""
+def change_my_password():
+    """✅ RENOMEADA: Endpoint para instituição alterar a sua própria password"""
     try:
         data = request.get_json()
         
@@ -212,100 +238,136 @@ def change_password():
         current_password = data['current_password']
         new_password = data['new_password']
         
-        if len(new_password) < 6:
-            return jsonify({'error': 'A nova password deve ter pelo menos 6 caracteres'}), 400
+        if len(new_password) < 8:
+            return jsonify({'error': 'A nova password deve ter pelo menos 8 caracteres'}), 400
+        
+        if not any(c.isupper() for c in new_password):
+            return jsonify({'error': 'A nova password deve conter pelo menos uma letra maiúscula'}), 400
+        
+        if not any(c.islower() for c in new_password):
+            return jsonify({'error': 'A nova password deve conter pelo menos uma letra minúscula'}), 400
+        
+        if not any(c.isdigit() for c in new_password):
+            return jsonify({'error': 'A nova password deve conter pelo menos um número'}), 400
         
         instituicao = get_current_instituicao()
         
-        # Verificar senha atual
-        if not instituicao.check_password(current_password) and current_password != 'sv2024':
+        if not instituicao.check_password(current_password):
             return jsonify({'error': 'Password atual incorreta'}), 401
         
+        if instituicao.check_password(new_password):
+            return jsonify({'error': 'A nova password deve ser diferente da atual'}), 400
+        
         instituicao.set_password(new_password)
+        instituicao.primeira_password = False  # ✅ Marcar que já não é primeira password
         db.session.commit()
         
         return jsonify({
             'success': True,
-            'message': 'Password alterada com sucesso'
+            'message': 'Password alterada com sucesso. Use a nova password no próximo login.'
         }), 200
         
     except Exception as e:
         db.session.rollback()
         return jsonify({'error': f'Erro interno: {str(e)}'}), 500
 
-@auth_bp.route('/registro', methods=['POST'])
-def registro():
-    """Endpoint para registro de novas instituições"""
+@auth_bp.route('/admin/change-password', methods=['POST'])
+@admin_required
+def admin_change_institution_password():
+    """✅ RENOMEADA: Endpoint para administrador alterar password de outra instituição"""
     try:
         data = request.get_json()
         
-        if not data:
-            return jsonify({'error': 'Dados não fornecidos'}), 400
+        if not data or 'instituicao_id' not in data or 'new_password' not in data:
+            return jsonify({'error': 'ID da instituição e nova password são obrigatórios'}), 400
         
-        # Registrar instituição usando o serviço
-        resultado = RegistroService.registrar_instituicao(data)
+        instituicao_id = data['instituicao_id']
+        new_password = data['new_password']
         
-        if resultado['sucesso']:
-            return jsonify({
-                'success': True,
-                'message': 'Instituição registada com sucesso! Aguarde aprovação para fazer login.',
-                'instituicao': resultado['instituicao'].to_dict()
-            }), 201
+        if len(new_password) < 8:
+            return jsonify({'error': 'A nova password deve ter pelo menos 8 caracteres'}), 400
+        
+        instituicao = Instituicao.query.get(instituicao_id)
+        
+        if not instituicao:
+            return jsonify({'error': 'Instituição não encontrada'}), 404
+        
+        current_admin = get_current_instituicao()
+        if instituicao_id == current_admin.id:
+            return jsonify({'error': 'Use a opção "Alterar minha password" para alterar sua própria password'}), 400
+        
+        instituicao.set_password(new_password)
+        instituicao.primeira_password = True  # ✅ Marcar como primeira password para forçar troca no próximo login
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': f'Password da instituição {instituicao.nome} alterada com sucesso'
+        }), 200
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': f'Erro interno: {str(e)}'}), 500
+
+@auth_bp.route('/validate-password', methods=['POST'])
+def validate_password_strength():
+    """✅ RENOMEADA: Endpoint para validar a força da password"""
+    try:
+        data = request.get_json()
+        
+        if not data or 'password' not in data:
+            return jsonify({'error': 'Password não fornecida'}), 400
+        
+        password = data['password']
+        feedback = []
+        strength = 0
+        
+        if len(password) >= 8:
+            strength += 1
         else:
-            return jsonify({'error': resultado['erro']}), 400
-            
+            feedback.append('Mínimo 8 caracteres')
+        
+        if any(c.isupper() for c in password):
+            strength += 1
+        else:
+            feedback.append('Pelo menos uma maiúscula')
+        
+        if any(c.islower() for c in password):
+            strength += 1
+        else:
+            feedback.append('Pelo menos uma minúscula')
+        
+        if any(c.isdigit() for c in password):
+            strength += 1
+        else:
+            feedback.append('Pelo menos um número')
+        
+        if any(c in '!@#$%^&*()_+-=[]{}|;:,.<>?' for c in password):
+            strength += 1
+        else:
+            feedback.append('Pelo menos um caractere especial (!@#$%...)')
+        
+        if strength <= 2:
+            level = 'Fraca'
+        elif strength <= 3:
+            level = 'Média'
+        elif strength <= 4:
+            level = 'Boa'
+        else:
+            level = 'Forte'
+        
+        return jsonify({
+            'success': True,
+            'strength': strength,
+            'level': level,
+            'feedback': feedback
+        }), 200
+        
     except Exception as e:
         return jsonify({'error': f'Erro interno: {str(e)}'}), 500
 
-@auth_bp.route('/verificar-disponibilidade', methods=['POST'])
-def verificar_disponibilidade():
-    """Endpoint para verificar se username/email estão disponíveis"""
-    try:
-        data = request.get_json()
-        
-        if not data:
-            return jsonify({'error': 'Dados não fornecidos'}), 400
-        
-        username = data.get('username', '').strip().lower()
-        email = data.get('email', '').strip().lower()
-        
-        if not username and not email:
-            return jsonify({'error': 'Username ou email deve ser fornecido'}), 400
-        
-        resultado = {'disponivel': True, 'campo': None}
-        
-        if username:
-            duplicata = RegistroService.verificar_duplicatas(username, '')
-            if duplicata['duplicata'] and duplicata['campo'] == 'username':
-                resultado = {'disponivel': False, 'campo': 'username'}
-        
-        if email and resultado['disponivel']:
-            duplicata = RegistroService.verificar_duplicatas('', email)
-            if duplicata['duplicata'] and duplicata['campo'] == 'email':
-                resultado = {'disponivel': False, 'campo': 'email'}
-        
-        return jsonify(resultado), 200
-        
-    except Exception as e:
-        return jsonify({'error': f'Erro interno: {str(e)}'}), 500
+# ==================== ROTAS ADMINISTRATIVAS ====================
 
-@auth_bp.route('/tipos-instituicao', methods=['GET'])
-def get_tipos_instituicao():
-    """Endpoint para obter tipos de instituição disponíveis"""
-    return jsonify({
-        'tipos': [
-            {'valor': 'ong', 'nome': 'ONG - Organização Não Governamental'},
-            {'valor': 'governo', 'nome': 'Órgão Governamental'},
-            {'valor': 'religiosa', 'nome': 'Instituição Religiosa'},
-            {'valor': 'empresa', 'nome': 'Empresa Privada'},
-            {'valor': 'cooperativa', 'nome': 'Cooperativa'},
-            {'valor': 'associacao', 'nome': 'Associação'},
-            {'valor': 'fundacao', 'nome': 'Fundação'},
-            {'valor': 'outro', 'nome': 'Outro'}
-        ]
-    }), 200
-
-# Rotas administrativas (para aprovação de instituições)
 @auth_bp.route('/admin/instituicoes-pendentes', methods=['GET'])
 @admin_required
 def get_instituicoes_pendentes():
@@ -372,11 +434,10 @@ def rejeitar_instituicao(instituicao_id):
 @auth_bp.route('/admin/eliminar-instituicao/<int:instituicao_id>', methods=['DELETE'])
 @admin_required
 def eliminar_instituicao(instituicao_id):
-    """Endpoint para eliminar uma instituição - VERSÃO CORRIGIDA COM IMPORTAÇÕES"""
+    """Endpoint para eliminar uma instituição"""
     try:
         current_instituicao = get_current_instituicao()
         
-        # Não permitir que o admin se elimine a si mesmo
         if instituicao_id == current_instituicao.id:
             return jsonify({'error': 'Não pode eliminar a sua própria instituição'}), 400
         
@@ -387,50 +448,40 @@ def eliminar_instituicao(instituicao_id):
         
         print(f"🔍 Iniciando eliminação da instituição: {instituicao.nome} (ID: {instituicao_id})")
         
-        # Verificar se há movimentos associados
         movimentos_count = MovimentoStock.query.filter_by(instituicao_id=instituicao_id).count()
         beneficiarios_count = Beneficiario.query.filter_by(instituicao_registro_id=instituicao_id).count()
         
         print(f"📊 Movimentos associados: {movimentos_count}")
         print(f"📊 Beneficiários associados: {beneficiarios_count}")
         
-        # ABORDAGEM CORRETA: Definir instituicao_id como NULL nos movimentos
         if movimentos_count > 0:
             print("🔄 Definindo instituicao_id como NULL nos movimentos...")
-            # Atualizar movimentos para remover a referência
             movimentos = MovimentoStock.query.filter_by(instituicao_id=instituicao_id).all()
             for movimento in movimentos:
-                movimento.instituicao_id = None  # ✅ AGORA PODE SER NULL
+                movimento.instituicao_id = None
                 print(f"   ✅ Movimento {movimento.id} atualizado")
             
-            db.session.flush()  # Forçar o UPDATE antes do DELETE
+            db.session.flush()
         
-        # ABORDAGEM CORRETA: Transferir beneficiários para outra instituição
         if beneficiarios_count > 0:
             print("🔄 Transferindo beneficiários para a instituição admin...")
-            # Encontrar uma instituição admin para transferir os beneficiários
             instituicao_admin = Instituicao.query.filter(
                 Instituicao.username.in_(['admin', 'caritas'])
             ).first()
             
             if instituicao_admin:
                 print(f"   ✅ Transferindo para: {instituicao_admin.nome}")
-                # Transferir beneficiários para a instituição admin
                 beneficiarios = Beneficiario.query.filter_by(instituicao_registro_id=instituicao_id).all()
                 for beneficiario in beneficiarios:
                     beneficiario.instituicao_registro_id = instituicao_admin.id
                     print(f"   ✅ Beneficiário {beneficiario.nome} transferido")
             else:
                 print("⚠️ Nenhuma instituição admin encontrada, mantendo beneficiários...")
-                # Se não há admin, manter os beneficiários (não fazer nada)
-                # Eles ficarão "órfãos" mas isso é melhor que erro
         
-        # Guardar informações para o log
         nome_instituicao = instituicao.nome
         username_instituicao = instituicao.username
         
         print("🗑️ Eliminando instituição...")
-        # AGORA podemos eliminar a instituição
         db.session.delete(instituicao)
         db.session.commit()
         
@@ -458,20 +509,24 @@ def eliminar_instituicao(instituicao_id):
 def get_todas_instituicoes():
     """Endpoint para listar todas as instituições (para administração)"""
     try:
-        # Buscar todas as instituições (aprovadas e não aprovadas)
         instituicoes = Instituicao.query.all()
         
         instituicoes_list = []
         for inst in instituicoes:
             inst_dict = inst.to_dict()
-            # Adicionar informações adicionais para admin
             inst_dict['estado'] = 'Aprovada' if inst.aprovada else 'Pendente' if not inst.aprovada and inst.ativa else 'Rejeitada'
-            inst_dict['pode_eliminar'] = inst.username not in ['admin', 'caritas']  # Não permitir eliminar admin
+            inst_dict['pode_eliminar'] = inst.username not in ['admin', 'caritas']
             instituicoes_list.append(inst_dict)
+        
+        current_admin = get_current_instituicao()
         
         return jsonify({
             'success': True,
-            'instituicoes': instituicoes_list
+            'instituicoes': instituicoes_list,
+            'admin': {
+                'nome': current_admin.nome,
+                'username': current_admin.username
+            }
         }), 200
         
     except Exception as e:
@@ -524,21 +579,17 @@ def validate_admin_access():
         username = data['username']
         password = data['password']
         
-        # Verificar se é um usuário admin
         if username not in ['admin', 'caritas']:
             return jsonify({'error': 'Acesso negado'}), 403
         
-        # Procurar a instituição pelo username
         instituicao = Instituicao.query.filter_by(username=username).first()
         
         if not instituicao:
             return jsonify({'error': 'Credenciais inválidas'}), 401
         
-        # Verificar password
-        if not instituicao.check_password(password) and password != 'sv2024':
+        if not instituicao.check_password(password):
             return jsonify({'error': 'Credenciais inválidas'}), 401
         
-        # Criar sessão
         session['instituicao_id'] = instituicao.id
         session['instituicao_nome'] = instituicao.nome
         session['instituicao_username'] = instituicao.username

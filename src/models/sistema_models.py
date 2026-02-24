@@ -25,6 +25,15 @@ class Instituicao(db.Model):
     aprovada_por = db.Column(db.String(100))
     observacoes_admin = db.Column(db.Text)
 
+    # ✅ NOVO: Campo para forçar alteração de password no primeiro login
+    primeira_password = db.Column(db.Boolean, default=True)
+
+    def __init__(self, **kwargs):
+        super(Instituicao, self).__init__(**kwargs)
+        # Se não foi passado um valor para primeira_password, define como True
+        if 'primeira_password' not in kwargs:
+            self.primeira_password = True
+
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
 
@@ -38,6 +47,8 @@ class Instituicao(db.Model):
         self.aprovada = True
         self.data_aprovacao = datetime.utcnow()
         self.aprovada_por = aprovada_por
+        # ✅ Quando aprovar, marcar que é primeira password
+        self.primeira_password = True
 
     def to_dict(self):
         return {
@@ -258,7 +269,8 @@ def init_dados_exemplo():
             responsavel='Director Cáritas',
             tipo_instituicao='religiosa',
             aprovada=True,
-            ativa=True
+            ativa=True,
+            primeira_password=True  # ✅ Marcar como primeira password
         )
         caritas.set_password('sv2024')
         db.session.add(caritas)
@@ -270,10 +282,25 @@ def init_dados_exemplo():
             responsavel='Comandante Bombeiros',
             tipo_instituicao='governo',
             aprovada=True,
-            ativa=True
+            ativa=True,
+            primeira_password=True  # ✅ Marcar como primeira password
         )
-        bombeiros.set_password('sv2024')
+        bombeiros.set_password('sv@2024')
         db.session.add(bombeiros)
+
+        # ✅ Também criar admin com password forte
+        admin = Instituicao(
+            nome='Administrador do Sistema',
+            username='admin',
+            email='admin@sistema.com',
+            responsavel='Administrador',
+            tipo_instituicao='governo',
+            aprovada=True,
+            ativa=True,
+            primeira_password=False  # Admin não precisa de primeira password
+        )
+        admin.set_password('Admin@2024')  # Password forte para admin
+        db.session.add(admin)
         
         # Criar itens de stock de exemplo
         itens_exemplo = [

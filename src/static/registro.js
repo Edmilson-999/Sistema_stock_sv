@@ -24,6 +24,151 @@ class SistemaRegistro {
     }
 
     /**
+ * Mostra modal para administrador alterar password de uma instituição
+ */
+    mostrarModalAlterarPassword(instituicaoId, instituicaoNome) {
+        const modal = document.createElement('div');
+        modal.className = 'modal-overlay';
+        modal.innerHTML = `
+            <div class="modal-content" style="max-width: 500px;">
+                <div class="modal-header">
+                    <h3>🔐 Alterar Password</h3>
+                    <p>Instituição: ${instituicaoNome}</p>
+                </div>
+                
+                <form id="formAlterarPasswordAdmin" onsubmit="event.preventDefault(); sistemaRegistro.alterarPasswordAdmin(${instituicaoId});">
+                    <div class="form-group">
+                        <label for="novaPassword">Nova Password *</label>
+                        <input type="password" id="novaPassword" name="novaPassword" required 
+                            style="width: 100%; padding: 12px; border: 2px solid #ddd; border-radius: 8px;">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="confirmarPassword">Confirmar Nova Password *</label>
+                        <input type="password" id="confirmarPassword" name="confirmarPassword" required 
+                            style="width: 100%; padding: 12px; border: 2px solid #ddd; border-radius: 8px;">
+                    </div>
+
+                    <div class="password-requirements" style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin: 20px 0;">
+                        <h4 style="margin-bottom: 10px; color: #2d5a27;">📋 Requisitos:</h4>
+                        <ul style="list-style: none; padding: 0; margin: 0;">
+                            <li style="margin-bottom: 5px;">• Mínimo 8 caracteres</li>
+                            <li style="margin-bottom: 5px;">• Pelo menos uma letra maiúscula</li>
+                            <li style="margin-bottom: 5px;">• Pelo menos uma letra minúscula</li>
+                            <li style="margin-bottom: 5px;">• Pelo menos um número</li>
+                        </ul>
+                    </div>
+
+                    <div class="alert alert-warning" style="margin: 15px 0;">
+                        ⚠️ A instituição precisará usar esta nova password no próximo login.
+                    </div>
+
+                    <div id="adminPasswordError" style="display: none; color: #721c24; background: #f8d7da; padding: 10px; border-radius: 5px; margin-bottom: 15px;"></div>
+
+                    <div style="display: flex; gap: 15px; margin-top: 25px;">
+                        <button type="submit" class="btn" style="flex: 1; padding: 15px;">
+                            🔐 Alterar Password
+                        </button>
+                        <button type="button" class="btn btn-secondary" onclick="this.closest('.modal-overlay').remove()" style="flex: 1; padding: 15px;">
+                            ❌ Cancelar
+                        </button>
+                    </div>
+                </form>
+            </div>
+        `;
+
+        document.body.appendChild(modal);
+    }
+
+    /**
+     * Administrador altera password de outra instituição
+     */
+    async alterarPasswordAdmin(instituicaoId) {
+        const novaPassword = document.getElementById('novaPassword').value;
+        const confirmarPassword = document.getElementById('confirmarPassword').value;
+
+        // Validações
+        if (!novaPassword || !confirmarPassword) {
+            this.mostrarErroAdminPassword('Todos os campos são obrigatórios');
+            return;
+        }
+
+        if (novaPassword !== confirmarPassword) {
+            this.mostrarErroAdminPassword('As passwords não coincidem');
+            return;
+        }
+
+        if (novaPassword.length < 8) {
+            this.mostrarErroAdminPassword('A password deve ter pelo menos 8 caracteres');
+            return;
+        }
+
+        if (!/[A-Z]/.test(novaPassword)) {
+            this.mostrarErroAdminPassword('A password deve conter pelo menos uma letra maiúscula');
+            return;
+        }
+
+        if (!/[a-z]/.test(novaPassword)) {
+            this.mostrarErroAdminPassword('A password deve conter pelo menos uma letra minúscula');
+            return;
+        }
+
+        if (!/[0-9]/.test(novaPassword)) {
+            this.mostrarErroAdminPassword('A password deve conter pelo menos um número');
+            return;
+        }
+
+        try {
+            const response = await fetch('/api/auth/admin/change-password', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    instituicao_id: instituicaoId,
+                    new_password: novaPassword
+                }),
+                credentials: 'include'
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                // Fechar modal
+                document.querySelector('.modal-overlay').remove();
+                
+                // Mostrar mensagem de sucesso
+                if (window.sistemaAlertas) {
+                    window.sistemaAlertas.mostrarNotificacao('✅ Password alterada com sucesso!', 'success');
+                } else {
+                    alert('Password alterada com sucesso!');
+                }
+            } else {
+                this.mostrarErroAdminPassword(data.error || 'Erro ao alterar password');
+            }
+        } catch (error) {
+            console.error('Erro ao alterar password:', error);
+            this.mostrarErroAdminPassword('Erro de conexão. Tente novamente.');
+        }
+    }
+
+    /**
+     * Mostra erro no formulário de alteração de password (admin)
+     */
+    mostrarErroAdminPassword(mensagem) {
+        const errorDiv = document.getElementById('adminPasswordError');
+        if (errorDiv) {
+            errorDiv.textContent = mensagem;
+            errorDiv.style.display = 'block';
+            
+            // Esconder após 5 segundos
+            setTimeout(() => {
+                errorDiv.style.display = 'none';
+            }, 5000);
+        } else {
+            alert(mensagem);
+        }
+    }
+
+    /**
      * Tenta acesso ao painel administrativo
      */
     async tentarAcessoAdmin() {
@@ -201,6 +346,9 @@ class SistemaRegistro {
     /**
      * Mostra diferentes abas na gestão de instituições
      */
+    /**
+ * Mostra diferentes abas na gestão de instituições
+ */
     mostrarAba(aba, event = null) {
         const conteudo = document.getElementById('abaConteudo');
         if (!conteudo) return;
@@ -280,6 +428,15 @@ class SistemaRegistro {
                         <p><strong>Data de Registo:</strong> ${dataCriacao}</p>
                         ${inst.descricao ? `<p><strong>Descrição:</strong> ${inst.descricao}</p>` : ''}
                     </div>
+                    
+                    <!-- ✅ NOVO: Botão para alterar password (apenas para aprovadas) -->
+                    ${inst.estado === 'Aprovada' ? `
+                        <div class="instituicao-actions" style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #f0f0f0;">
+                            <button class="btn btn-small btn-outline" onclick="sistemaRegistro.mostrarModalAlterarPassword(${inst.id}, '${inst.nome.replace(/'/g, "\\'")}')">
+                                🔐 Alterar Password
+                            </button>
+                        </div>
+                    ` : ''}
                     
                     ${inst.estado === 'Pendente' ? `
                         <div class="instituicao-actions">
@@ -1150,6 +1307,21 @@ const registroCSS = `
         justify-content: space-between;
     }
 }
+
+.btn-outline {
+    background: transparent;
+    color: #11998e;
+    border: 2px solid #11998e;
+    box-shadow: none;
+}
+
+.btn-outline:hover {
+    background: #11998e;
+    color: white;
+    transform: translateY(-2px);
+    box-shadow: 0 10px 25px rgba(17, 153, 142, 0.4);
+}
+
 </style>
 `;
 
