@@ -2072,16 +2072,6 @@ function showChangePasswordModal() {
                 <div id="passwordMatchMessage" style="font-size: 13px; margin-top: 5px;"></div>
             </div>
             
-            <div class="password-requirements" style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin: 20px 0;">
-                <h4 style="margin-bottom: 10px; color: #2d5a27;">📋 Requisitos da Password:</h4>
-                <ul style="list-style: none; padding: 0;">
-                    <li id="reqLength" style="margin-bottom: 5px;">❌ Mínimo 8 caracteres</li>
-                    <li id="reqUpper" style="margin-bottom: 5px;">❌ Pelo menos uma letra maiúscula</li>
-                    <li id="reqLower" style="margin-bottom: 5px;">❌ Pelo menos uma letra minúscula</li>
-                    <li id="reqNumber" style="margin-bottom: 5px;">❌ Pelo menos um número</li>
-                    <li id="reqSpecial" style="margin-bottom: 5px;">❌ Pelo menos um caractere especial (!@#$%...)</li>
-                </ul>
-            </div>
             
             <div id="passwordError" style="display: none; color: #721c24; background: #f8d7da; padding: 10px; border-radius: 5px; margin-bottom: 15px;"></div>
             
