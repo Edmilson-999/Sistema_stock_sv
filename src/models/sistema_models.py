@@ -1,8 +1,15 @@
 from datetime import datetime
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
+import enum
 
 db = SQLAlchemy()
+
+# ===== DEFINIR ENUMS NOMEADOS PARA POSTGRESQL =====
+class TipoMovimento(enum.Enum):
+    __tablename__ = 'tipo_movimento_enum'
+    entrada = 'entrada'
+    saida = 'saida'
 
 class Instituicao(db.Model):
     __tablename__ = 'instituicoes'
@@ -24,15 +31,7 @@ class Instituicao(db.Model):
     data_aprovacao = db.Column(db.DateTime)
     aprovada_por = db.Column(db.String(100))
     observacoes_admin = db.Column(db.Text)
-
-    # ✅ NOVO: Campo para forçar alteração de password no primeiro login
     primeira_password = db.Column(db.Boolean, default=True)
-
-    def __init__(self, **kwargs):
-        super(Instituicao, self).__init__(**kwargs)
-        # Se não foi passado um valor para primeira_password, define como True
-        if 'primeira_password' not in kwargs:
-            self.primeira_password = True
 
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
@@ -47,7 +46,6 @@ class Instituicao(db.Model):
         self.aprovada = True
         self.data_aprovacao = datetime.utcnow()
         self.aprovada_por = aprovada_por
-        # ✅ Quando aprovar, marcar que é primeira password
         self.primeira_password = True
 
     def to_dict(self):
@@ -64,6 +62,7 @@ class Instituicao(db.Model):
             'descricao': self.descricao,
             'aprovada': self.aprovada,
             'ativa': self.ativa,
+            'primeira_password': self.primeira_password,
             'data_criacao': self.data_criacao.isoformat() if self.data_criacao else None,
             'data_aprovacao': self.data_aprovacao.isoformat() if self.data_aprovacao else None
         }
@@ -103,7 +102,6 @@ class Beneficiario(db.Model):
         }
     
     def get_historico_ajuda(self):
-        """Retorna o histórico de ajuda deste beneficiário"""
         movimentos = MovimentoStock.query.filter_by(
             beneficiario_nif=self.nif,
             tipo_movimento='saida'
@@ -146,7 +144,6 @@ class ItemStock(db.Model):
         }
     
     def get_stock_total(self):
-        """Calcula o stock total deste item"""
         entradas = db.session.query(db.func.sum(MovimentoStock.quantidade)).filter_by(
             item_id=self.id, tipo_movimento='entrada'
         ).scalar() or 0
@@ -158,7 +155,6 @@ class ItemStock(db.Model):
         return entradas - saidas
     
     def get_stock_por_instituicao(self, instituicao_id):
-        """Calcula o stock deste item para uma instituição específica"""
         entradas = db.session.query(db.func.sum(MovimentoStock.quantidade)).filter_by(
             item_id=self.id, instituicao_id=instituicao_id, tipo_movimento='entrada'
         ).scalar() or 0
@@ -176,7 +172,10 @@ class MovimentoStock(db.Model):
     item_id = db.Column(db.Integer, db.ForeignKey('itens_stock.id'), nullable=False)
     instituicao_id = db.Column(db.Integer, db.ForeignKey('instituicoes.id'), nullable=True)
     beneficiario_nif = db.Column(db.String(20), db.ForeignKey('beneficiarios.nif'))
-    tipo_movimento = db.Column(db.Enum('entrada', 'saida'), nullable=False)
+    
+    # Isso evita problemas com ENUMs no PostgreSQL
+    tipo_movimento = db.Column(db.String(10), nullable=False)  # 'entrada' ou 'saida'
+    
     quantidade = db.Column(db.Float, nullable=False)
     data = db.Column(db.DateTime, default=datetime.utcnow)
     motivo = db.Column(db.Text)
@@ -184,7 +183,7 @@ class MovimentoStock(db.Model):
     origem_doacao = db.Column(db.String(100))  # Para entradas
     local_entrega = db.Column(db.String(100))  # Para saídas
     
-    # Relacionamentos CORRIGIDOS (nomes únicos)
+    # Relacionamentos
     item = db.relationship('ItemStock', backref='movimentos_stock')
     instituicao_movimento = db.relationship('Instituicao', backref='movimentos_stock')  
     beneficiario = db.relationship('Beneficiario', backref='movimentos_stock') 
@@ -254,7 +253,7 @@ class RelatorioMensal(db.Model):
             'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
             'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
         ]
-        return meses[self.mes - 1] if 1 <= self.mes <= 12 else f'Mês {self.mes}'    
+        return meses[self.mes - 1] if 1 <= self.mes <= 12 else f'Mês {self.mes}'
 
 def init_dados_exemplo():
     """Inicializa dados de exemplo para a base de dados"""
@@ -270,9 +269,9 @@ def init_dados_exemplo():
             tipo_instituicao='religiosa',
             aprovada=True,
             ativa=True,
-            primeira_password=True  # ✅ Marcar como primeira password
+            primeira_password=True
         )
-        caritas.set_password('sv2024')
+        caritas.set_password('Caritas@2024')
         db.session.add(caritas)
         
         bombeiros = Instituicao(
@@ -283,12 +282,12 @@ def init_dados_exemplo():
             tipo_instituicao='governo',
             aprovada=True,
             ativa=True,
-            primeira_password=True  # ✅ Marcar como primeira password
+            primeira_password=True
         )
-        bombeiros.set_password('sv@2024')
+        bombeiros.set_password('Bombeiros@2024')
         db.session.add(bombeiros)
-
-        # ✅ Também criar admin com password forte
+        
+        # Admin
         admin = Instituicao(
             nome='Administrador do Sistema',
             username='admin',
@@ -297,9 +296,9 @@ def init_dados_exemplo():
             tipo_instituicao='governo',
             aprovada=True,
             ativa=True,
-            primeira_password=False  # Admin não precisa de primeira password
+            primeira_password=False
         )
-        admin.set_password('Admin@2024')  # Password forte para admin
+        admin.set_password('Admin@2024')
         db.session.add(admin)
         
         # Criar itens de stock de exemplo
