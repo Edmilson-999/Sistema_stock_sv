@@ -218,17 +218,3 @@ Este sistema foi criado com o objetivo de facilitar a coordenação entre as dif
 ---
 
 *Sistema desenvolvido com 💚 para apoio às vítimas do enchente de São Vicente*
-
-#### TO DO ############################
-
-Para ambiente de produção, recomendo:
-
-Alterar a SECRET_KEY em main.py
-
-Usar banco de dados PostgreSQL em vez de SQLite
-
-Configurar HTTPS
-
-Implementar sistema de logs
-
-Fazer backup regular da base de dados
