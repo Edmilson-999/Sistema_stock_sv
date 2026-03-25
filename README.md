@@ -79,5 +79,5 @@ Antes de começar, certifique-se de ter instalado:
 ### 1. Clonar o repositório
 
 ```bash
-git clone https://github.com/seu-usuario/sistema-stock-sv.git
+git clone https://github.com/Edmilson-999/sistema-stock-sv.git
 cd sistema-stock-sv
